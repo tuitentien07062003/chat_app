@@ -38,7 +38,7 @@ class FriendsController extends GetxController {
 
     debounce(
       _searchQuery,
-      (_) => _filteredFriends(),
+      (_) => _filterFriends(),
       time: Duration(milliseconds: 300),
     );
   }
@@ -85,7 +85,7 @@ class FriendsController extends GetxController {
       }
 
       _friends.value = friendUsers;
-      _filteredFriends();
+      _filterFriends();
     } catch (e) {
       _error.value = e.toString();
     } finally {

@@ -187,7 +187,7 @@ class FirestoreService {
               userId: request.senderId,
               title: 'Friend Request Declined',
               body: '${request.receiverId} declined your friend request',
-              type: NotificationType.fruendRequestDeclined,
+              type: NotificationType.friendRequestDeclined,
               data: {'userId': request.receiverId},
               createdAt: DateTime.now(),
             ),
@@ -224,6 +224,7 @@ class FirestoreService {
     return _firestore
         .collection('friendRequests')
         .where('senderId', isEqualTo: userId)
+        .where('status', isEqualTo: 'pending')
         .orderBy('createdAt', descending: true)
         .snapshots()
         .map(

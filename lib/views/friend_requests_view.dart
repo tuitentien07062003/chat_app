@@ -157,7 +157,7 @@ class FriendRequestsScreen extends GetView<FriendRequestsController> {
 
   Widget _buildSentRequestsTab() {
     return Obx(() {
-      if (controller.receivedRequests.isEmpty) {
+      if (controller.sentRequests.isEmpty) {
         return _buildEmptyState(
           icon: Icons.inbox_outlined,
           title: "No Sent Requests",

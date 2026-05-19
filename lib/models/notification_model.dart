@@ -1,7 +1,7 @@
 enum NotificationType {
   friendRequest,
   friendRequestAccepted,
-  fruendRequestDeclined,
+  friendRequestDeclined,
   newMessage,
   friendRemoved,
 }

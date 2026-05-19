@@ -1,4 +1,5 @@
 import 'package:chat_app/controllers/auth_controller.dart';
+import 'package:chat_app/controllers/friends_controller.dart';
 import 'package:chat_app/models/friend_request_model.dart';
 import 'package:chat_app/models/user_model.dart';
 import 'package:chat_app/services/firestore_service.dart';
@@ -70,6 +71,11 @@ class FriendRequestsController extends GetxController {
         req.id,
         FriendRequestStatus.accepted,
       );
+      try {
+        Get.find<FriendsController>().refreshFriends();
+      } catch (e) {
+        print(e.toString());
+      }
       Get.snackbar('Success', "Friend request accepted");
     } catch (e) {
       print(e.toString());

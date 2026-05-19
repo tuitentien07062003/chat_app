@@ -1,6 +1,8 @@
 import 'package:chat_app/controllers/auth_controller.dart';
 import 'package:chat_app/controllers/home_controller.dart';
+import 'package:chat_app/controllers/main_controller.dart';
 import 'package:chat_app/themes/app_theme.dart';
+import 'package:chat_app/views/widgets/chat_list_view.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -20,8 +22,30 @@ class HomeScreen extends GetView<HomeController> {
                 ? _buildSearchResults()
                 : _buildQuickFilters(),
           ),
+
+          Expanded(
+            child: RefreshIndicator(
+              onRefresh: controller.refreshChats,
+              color: AppTheme.primaryColor,
+              child: Obx(() {
+                if (controller.chats.isEmpty) {
+                  if (controller.isSearching &&
+                      controller.searchQuery.isNotEmpty) {
+                    return _buildNoSearchResults();
+                  } else if (controller.activeFilter != "All") {
+                    return _buildNoFilterResults();
+                  } else {
+                    return _buildEmptyState();
+                  }
+                }
+
+                return _buildChatsList();
+              }),
+            ),
+          ),
         ],
       ),
+      floatingActionButton: _buildFloatingActionButton(),
     );
   }
 
@@ -332,5 +356,289 @@ class HomeScreen extends GetView<HomeController> {
         ),
       ),
     );
+  }
+
+  Widget _buildEmptyState() {
+    return SingleChildScrollView(
+      physics: AlwaysScrollableScrollPhysics(),
+      child: Container(
+        height: MediaQuery.of(Get.context!).size.height * 0.6,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(24),
+            topRight: Radius.circular(24),
+          ),
+        ),
+        child: Center(
+          child: Padding(
+            padding: EdgeInsets.all(32),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _buildEmptyStateIcon(),
+                SizedBox(height: 24),
+                _buildEmptyStateText(),
+                SizedBox(height: 24),
+                _buildEmptyStateActions(),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyStateIcon() {
+    return Container(
+      width: 140,
+      height: 140,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            AppTheme.primaryColor.withOpacity(0.1),
+            AppTheme.primaryColor.withOpacity(0.05),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(70),
+      ),
+      child: Icon(
+        Icons.chat_bubble_outline_rounded,
+        size: 64,
+        color: AppTheme.primaryColor,
+      ),
+    );
+  }
+
+  Widget _buildEmptyStateText() {
+    return Column(
+      children: [
+        Text(
+          'No conversations yet',
+          style: TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.w700,
+            color: AppTheme.textPrimaryColor,
+          ),
+        ),
+        SizedBox(height: 8),
+        Text(
+          'Connect with friends and start conversations',
+          style: TextStyle(
+            fontSize: 15,
+            height: 1.4,
+            color: AppTheme.textPrimaryColor,
+          ),
+          textAlign: TextAlign.center,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEmptyStateActions() {
+    return Column(
+      children: [
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            onPressed: () {
+              final mainController = Get.find<MainController>();
+              mainController.changeTabIndex(2);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.primaryColor,
+              foregroundColor: Colors.white,
+              elevation: 0,
+              padding: EdgeInsets.symmetric(vertical: 16),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            icon: Icon(Icons.person_search_rounded),
+            label: Text(
+              'Find People',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ),
+        SizedBox(height: 12),
+
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: () {
+              final mainController = Get.find<MainController>();
+              mainController.changeTabIndex(1);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.white,
+              foregroundColor: AppTheme.textPrimaryColor,
+              side: BorderSide(color: AppTheme.textPrimaryColor),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            icon: Icon(Icons.person_search_rounded),
+            label: Text(
+              'View Friends',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildChatsList() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(24),
+          topRight: Radius.circular(24),
+        ),
+      ),
+      child: Column(
+        children: [
+          if (!controller.isSearching || controller.searchQuery.isEmpty)
+            _buildChatHeader(),
+          Expanded(
+            child: ListView.separated(
+              padding: EdgeInsets.symmetric(
+                vertical: controller.isSearching ? 16 : 8,
+                horizontal: 16,
+              ),
+              separatorBuilder: (context, index) =>
+                  Divider(height: 1, color: Colors.grey[200], indent: 72),
+              itemCount: controller.chats.length,
+              itemBuilder: (context, index) {
+                final chat = controller.chats[index];
+                final otherUser = controller.getOtherUser(chat);
+
+                if (otherUser == null) {
+                  return SizedBox.shrink();
+                }
+                return AnimatedContainer(
+                  duration: Duration(milliseconds: 300),
+                  child: ChatListScreen(
+                    chat: chat,
+                    otherUser: otherUser,
+                    lastMessTime: controller.formatLastMessageTime(
+                      chat.lastMessageTime,
+                    ),
+                    onTap: () => controller.openChat(chat),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildChatHeader() {
+    return Container(
+      padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Obx(() {
+            String title = "Recent Chats";
+            switch (controller.activeFilter) {
+              case "Unread":
+                title = "Unread Messages";
+                break;
+              case "Recent":
+                title = "Recent Messages";
+                break;
+              case "Active":
+                title = "Active Messages";
+                break;
+            }
+            return Text(
+              title,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: AppTheme.textSecondaryColor,
+              ),
+            );
+          }),
+
+          Row(
+            children: [
+              if (controller.activeFilter != 'All')
+                TextButton(
+                  onPressed: controller.clearAllFilters,
+                  child: Text(
+                    "Clear Filter",
+                    style: TextStyle(
+                      color: AppTheme.primaryColor,
+                      fontWeight: FontWeight.w500,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFloatingActionButton() {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: AppTheme.primaryColor.withOpacity(0.3),
+            blurRadius: 12,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: FloatingActionButton.extended(
+        onPressed: () {
+          final mainController = Get.find<MainController>();
+          mainController.changeTabIndex(1);
+        },
+        backgroundColor: AppTheme.primaryColor,
+        foregroundColor: Colors.white,
+        elevation: 0,
+        icon: Icon(Icons.chat_rounded, size: 20),
+        label: Text(
+          "New Chat",
+          style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+        ),
+      ),
+    );
+  }
+
+  IconData _getFilterIcon(String filter) {
+    switch (filter) {
+      case "Unread":
+        return Icons.mark_email_unread_outlined;
+      case "Recent":
+        return Icons.schedule_outlined;
+      case "Active":
+        return Icons.trending_up_outlined;
+      default:
+        return Icons.filter_list_outlined;
+    }
+  }
+
+  String _getFilterEmptyMessage(String filter) {
+    switch (filter) {
+      case "Unread":
+        return "All conversations are up to date";
+      case "Recent":
+        return "No convaersations from the last 3 days";
+      case "Active":
+        return "No convaersations from the last week";
+      default:
+        return "No convaersations found";
+    }
   }
 }
