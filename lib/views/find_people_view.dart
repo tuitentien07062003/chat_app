@@ -8,7 +8,16 @@ class FindPeopleScreen extends GetView<UsersListController> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Find People'), leading: SizedBox()),
+      appBar: AppBar(
+        title: Text('Find People'),
+        leading: SizedBox(),
+        actions: [
+          IconButton(
+            onPressed: controller.openBlockedList,
+            icon: Icon(Icons.block_outlined),
+          ),
+        ],
+      ),
       body: Column(
         children: [
           _buildSearchBar(),

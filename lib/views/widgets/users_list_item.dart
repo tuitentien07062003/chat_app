@@ -22,7 +22,8 @@ class UsersListItem extends StatelessWidget {
     return Obx(() {
       final relationshipStatus = controller.getUserRelationshipStatus(user.id);
 
-      if (relationshipStatus == UserRelationshipStatus.friends) {
+      if (relationshipStatus == UserRelationshipStatus.friends ||
+          relationshipStatus == UserRelationshipStatus.blocked) {
         return SizedBox.shrink();
       }
       return Card(

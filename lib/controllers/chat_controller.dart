@@ -1,9 +1,9 @@
 import 'package:chat_app/controllers/auth_controller.dart';
+import 'package:chat_app/models/friendship_model.dart';
 import 'package:chat_app/models/message_model.dart';
 import 'package:chat_app/models/user_model.dart';
 import 'package:chat_app/services/firestore_service.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/widgets.dart';
 import 'package:get/get.dart';
 import 'package:uuid/uuid.dart';
 
@@ -36,6 +36,9 @@ class ChatController extends GetxController {
   String get chatId => _chatId.value;
   bool get isTyping => _isTyping.value;
 
+  final Rxn<FriendshipModel> friendship = Rxn<FriendshipModel>();
+  String get currentUserId => _authController.user?.uid ?? '';
+
   @override
   void onInit() {
     super.onInit();
@@ -63,6 +66,23 @@ class ChatController extends GetxController {
       _otherUser.value = arg['otherUser'];
       _loadMessages();
       _markMessagesAsRead();
+      _listenToFriendshipRealtime();
+    }
+  }
+
+  void _listenToFriendshipRealtime() {
+    final currentId = _authController.user?.uid;
+    final otherId = _otherUser.value?.id;
+
+    if (currentId != null && otherId != null) {
+      _firestoreService.getAllRelationshipsStream(currentId).listen((list) {
+        final match = list.firstWhereOrNull(
+          (f) =>
+              (f.userId == currentId && f.friendId == otherId) ||
+              (f.userId == otherId && f.friendId == currentId),
+        );
+        friendship.value = match;
+      });
     }
   }
 
@@ -189,6 +209,10 @@ class ChatController extends GetxController {
       return;
     }
 
+    if (friendship.value != null && friendship.value!.isBlocked) {
+      return;
+    }
+
     if (await _firestoreService.isUnFriended(currentUserId, otherUserId)) {
       Get.snackbar("Error", "You and them are not a friend");
       return;
@@ -219,11 +243,11 @@ class ChatController extends GetxController {
 
   Future<void> _markMessagesAsRead() async {
     final currentUserId = _authController.user?.uid;
-    if (currentUserId != null || _chatId.value.isNotEmpty) {
+    if (currentUserId != null && _chatId.value.isNotEmpty) {
       try {
         await _firestoreService.restoreUnreadCount(
           _chatId.value,
-          currentUserId!,
+          currentUserId,
         );
       } catch (e) {
         print(e.toString());

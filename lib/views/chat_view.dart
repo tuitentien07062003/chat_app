@@ -163,7 +163,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                     isMyMessage: isMyMessage,
                     showTime: showTime,
                     timeText: controller.formatMessTime(message.timestamp),
-                    onLongPress: isMyMessage
+                    onLongPress: isMyMessage && !message.isDeleted
                         ? () => _showMessageOptions(message)
                         : null,
                   );
@@ -196,71 +196,96 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   }
 
   Widget _buildMessInput() {
-    return Container(
-      padding: EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Theme.of(Get.context!).scaffoldBackgroundColor,
-        border: Border(
-          top: BorderSide(
-            color: AppTheme.borderColor.withOpacity(0.5),
-            width: 1,
+    return Obx(() {
+      final friendship = controller.friendship.value;
+      final bool isBlocked = friendship != null && friendship.isBlocked;
+      return Container(
+        padding: EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Theme.of(Get.context!).scaffoldBackgroundColor,
+          border: Border(
+            top: BorderSide(
+              color: AppTheme.borderColor.withOpacity(0.5),
+              width: 1,
+            ),
           ),
         ),
+        child: SafeArea(
+          child: isBlocked
+              ? _buildBlockedInputState()
+              : _buildNormalInputState(),
+        ),
+      );
+    });
+  }
+
+  Widget _buildBlockedInputState() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: AppTheme.cardColor.withOpacity(0.4),
+        borderRadius: BorderRadius.circular(12),
       ),
-      child: SafeArea(
-        child: Row(
-          children: [
-            Expanded(
-              child: Container(
-                decoration: BoxDecoration(
-                  color: AppTheme.cardColor,
-                  borderRadius: BorderRadius.circular(24),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: controller.messageController,
-                        decoration: InputDecoration(
-                          hintText: "Type a message",
-                          border: InputBorder.none,
-                          contentPadding: EdgeInsets.symmetric(
-                            vertical: 12,
-                            horizontal: 20,
-                          ),
-                        ),
-                        maxLines: null,
-                        textCapitalization: TextCapitalization.sentences,
-                        onSubmitted: (_) => controller.sendMessage(),
+      child: Text(
+        "Không thể gửi tin nhắn do tài khoản này đã bị chặn hoặc bạn đã chặn họ.",
+        style: TextStyle(
+          color: AppTheme.textSecondaryColor.withOpacity(0.6),
+          fontSize: 14,
+          fontWeight: FontWeight.w500,
+          fontStyle: FontStyle.italic,
+        ),
+        textAlign: TextAlign.center,
+      ),
+    );
+  }
+
+  Widget _buildNormalInputState() {
+    return Row(
+      children: [
+        Expanded(
+          child: Container(
+            decoration: BoxDecoration(
+              color: AppTheme.cardColor,
+              borderRadius: BorderRadius.circular(24),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: controller.messageController,
+                    decoration: const InputDecoration(
+                      hintText: "Type a message",
+                      border: InputBorder.none,
+                      contentPadding: EdgeInsets.symmetric(
+                        vertical: 12,
+                        horizontal: 20,
                       ),
                     ),
-                  ],
-                ),
-              ),
-            ),
-            SizedBox(width: 8),
-            Obx(
-              () => Container(
-                decoration: BoxDecoration(
-                  color: controller.isTyping
-                      ? AppTheme.primaryColor
-                      : AppTheme.textSecondaryColor,
-                  borderRadius: BorderRadius.circular(24),
-                ),
-                child: IconButton(
-                  onPressed: controller.isSending
-                      ? null
-                      : controller.sendMessage,
-                  icon: Icon(
-                    Icons.send_rounded,
-                    color: controller.isSending ? Colors.white : Colors.blue,
+                    maxLines: null,
+                    textCapitalization: TextCapitalization.sentences,
+                    onSubmitted: (_) => controller.sendMessage(),
                   ),
                 ),
-              ),
+              ],
             ),
-          ],
+          ),
         ),
-      ),
+        const SizedBox(width: 8),
+        Container(
+          decoration: BoxDecoration(
+            color: controller.isTyping
+                ? AppTheme.primaryColor
+                : AppTheme.textSecondaryColor,
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: IconButton(
+            onPressed: controller.isSending ? null : controller.sendMessage,
+            icon: const Icon(Icons.send_rounded, color: Colors.white),
+          ),
+        ),
+      ],
     );
   }
 

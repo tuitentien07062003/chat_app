@@ -15,6 +15,9 @@ class NotificationsController extends GetxController {
   final RxBool _isLoading = false.obs;
   final RxString _error = ''.obs;
 
+  final Set<String> _knownNotiIds = {};
+  bool _isFirstLoad = true;
+
   List<NotificationModel> get noti => _noti;
   Map<String, UserModel> get users => _users;
   bool get isLoading => _isLoading.value;
@@ -30,7 +33,38 @@ class NotificationsController extends GetxController {
   void _loadNoti() {
     final currentUserId = _authController.user?.uid;
     if (currentUserId != null) {
-      _noti.bindStream(_firestoreService.getNotificationsStream(currentUserId));
+      final Stream<List<NotificationModel>> stream = _firestoreService
+          .getNotificationsStream(currentUserId);
+      _noti.bindStream(stream);
+
+      stream.listen((notifications) {
+        if (_isFirstLoad) {
+          _knownNotiIds.addAll(notifications.map((n) => n.id));
+          _isFirstLoad = false;
+          return;
+        }
+
+        for (var noti in notifications) {
+          if (noti.type == NotificationType.newMessage && !noti.isRead) {
+            final senderId = noti.data['senderId'] ?? noti.data['userId'];
+            if (senderId == null) continue;
+
+            bool isInsideThisChatRoom = false;
+            if (Get.currentRoute == AppRoutes.chat) {
+              final args = Get.arguments;
+              if (args is Map && args['otherUser'] != null) {
+                if (args['otherUser'].id == senderId) {
+                  isInsideThisChatRoom = true;
+                }
+              }
+            }
+            if (!isInsideThisChatRoom && !_knownNotiIds.contains(noti.id)) {
+              _knownNotiIds.add(noti.id);
+              _showNewMessageSnackbar(noti, senderId);
+            }
+          }
+        }
+      });
     }
   }
 
@@ -43,6 +77,56 @@ class NotificationsController extends GetxController {
         }
         return userMap;
       }),
+    );
+  }
+
+  void _showNewMessageSnackbar(NotificationModel noti, String senderId) {
+    final sender = getUser(senderId);
+    if (sender == null) return;
+
+    String displayContent = noti.body;
+    if (displayContent.length > 35) {
+      displayContent = "${displayContent.substring(0, 35)}...";
+    }
+
+    Get.snackbar(
+      sender.displayName,
+      displayContent,
+      icon: Padding(
+        padding: const EdgeInsets.only(left: 8.0),
+        child: CircleAvatar(
+          radius: 18,
+          backgroundColor: AppTheme.primaryColor,
+          child: sender.photoUrl.isNotEmpty
+              ? ClipOval(
+                  child: Image.network(
+                    sender.photoUrl,
+                    width: 36,
+                    height: 36,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) =>
+                        _buildDefaultAvatarText(sender.displayName),
+                  ),
+                )
+              : _buildDefaultAvatarText(sender.displayName),
+        ),
+      ),
+      snackPosition: SnackPosition.TOP,
+      duration: const Duration(seconds: 3),
+      onTap: (_) {
+        handleNotiTap(noti);
+      },
+    );
+  }
+
+  Widget _buildDefaultAvatarText(String name) {
+    return Text(
+      name.isNotEmpty ? name[0].toUpperCase() : "?",
+      style: TextStyle(
+        color: Colors.white,
+        fontWeight: FontWeight.bold,
+        fontSize: 16,
+      ),
     );
   }
 

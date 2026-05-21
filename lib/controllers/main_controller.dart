@@ -1,5 +1,6 @@
 import 'package:chat_app/controllers/friends_controller.dart';
 import 'package:chat_app/controllers/home_controller.dart';
+import 'package:chat_app/controllers/notifications_controller.dart';
 import 'package:chat_app/controllers/profile_controller.dart';
 import 'package:chat_app/controllers/users_list_controller.dart';
 import 'package:flutter/material.dart';
@@ -19,6 +20,8 @@ class MainController extends GetxController {
     Get.lazyPut(() => FriendsController());
     Get.lazyPut(() => UsersListController());
     Get.lazyPut(() => ProfileController());
+
+    Get.put(NotificationsController(), permanent: true);
   }
 
   @override

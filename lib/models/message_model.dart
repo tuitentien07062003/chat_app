@@ -15,7 +15,9 @@ class MessageModel {
   final DateTime timestamp;
   final bool isRead;
   final bool isEdited;
+  final bool isDeleted;
   final DateTime? editedAt;
+  final DateTime? deletedAt;
 
   MessageModel({
     required this.id,
@@ -26,7 +28,9 @@ class MessageModel {
     required this.timestamp,
     this.isRead = false,
     this.isEdited = false,
+    this.isDeleted = false,
     this.editedAt,
+    this.deletedAt,
   });
 
   Map<String, dynamic> toMap() {
@@ -39,7 +43,9 @@ class MessageModel {
       'timestamp': timestamp.millisecondsSinceEpoch,
       'isRead': isRead,
       'isEdited': isEdited,
+      'isDeleted': isDeleted,
       'editedAt': editedAt?.millisecondsSinceEpoch,
+      'deletedAt': deletedAt?.millisecondsSinceEpoch,
     };
   }
 
@@ -56,8 +62,12 @@ class MessageModel {
       timestamp: DateTime.fromMillisecondsSinceEpoch(map['timestamp'] ?? 0),
       isRead: map['isRead'] ?? false,
       isEdited: map['isEdited'] ?? false,
+      isDeleted: map['isDeleted'] ?? false,
       editedAt: map['editedAt'] != null
           ? DateTime.fromMillisecondsSinceEpoch(map['editedAt'])
+          : null,
+      deletedAt: map['deletedAt'] != null
+          ? DateTime.fromMillisecondsSinceEpoch(map['deletedAt'])
           : null,
     );
   }
@@ -71,7 +81,9 @@ class MessageModel {
     DateTime? timestamp,
     bool? isRead,
     bool? isEdited,
+    bool? isDeleted,
     DateTime? editedAt,
+    DateTime? deletedAt,
   }) {
     return MessageModel(
       id: id ?? this.id,
@@ -82,7 +94,9 @@ class MessageModel {
       timestamp: timestamp ?? this.timestamp,
       isRead: isRead ?? this.isRead,
       isEdited: isEdited ?? this.isEdited,
+      isDeleted: isDeleted ?? this.isDeleted,
       editedAt: editedAt ?? this.editedAt,
+      deletedAt: deletedAt ?? this.deletedAt,
     );
   }
 }

@@ -1,4 +1,5 @@
 import 'package:chat_app/controllers/friends_controller.dart';
+import 'package:chat_app/models/user_model.dart';
 import 'package:chat_app/themes/app_theme.dart';
 import 'package:chat_app/views/widgets/friend_list_item.dart';
 import 'package:flutter/material.dart';
@@ -155,6 +156,56 @@ class FriendsScreen extends GetView<FriendsController> {
             ],
           ],
         ),
+      ),
+    );
+  }
+
+  void _showUnfriendDialog(UserModel friend) {
+    Get.dialog(
+      AlertDialog(
+        title: Text("Unfriend"),
+        content: Text(
+          "Are you sure you want to unfriend ${friend.displayName}?",
+        ),
+        actions: [
+          TextButton(onPressed: () => Get.back(), child: Text("Cancel")),
+          TextButton(
+            onPressed: () {
+              controller.removeFriends(friend);
+            },
+            child: Text(
+              "Unfriend",
+              style: TextStyle(
+                color: AppTheme.errorColor,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showBlockDialog(UserModel friend) {
+    Get.dialog(
+      AlertDialog(
+        title: Text("Block Friend"),
+        content: Text("Are you sure you want to block ${friend.displayName}?"),
+        actions: [
+          TextButton(onPressed: () => Get.back(), child: Text("Cancel")),
+          TextButton(
+            onPressed: () {
+              controller.blockFriend(friend);
+            },
+            child: Text(
+              "Block",
+              style: TextStyle(
+                color: AppTheme.errorColor,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

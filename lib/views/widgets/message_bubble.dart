@@ -18,6 +18,27 @@ class MessageBubble extends StatelessWidget {
     this.onLongPress,
   });
 
+  String _getFormattedTime() {
+    final dynamic timeData = message.timestamp;
+    DateTime time;
+
+    if (timeData is int) {
+      time = DateTime.fromMillisecondsSinceEpoch(timeData);
+    } else if (timeData is DateTime) {
+      time = timeData;
+    } else {
+      time = DateTime.now();
+    }
+
+    final hour = time.hour.toString().padLeft(2, '0');
+    final minute = time.minute.toString().padLeft(2, '0');
+
+    if (message.isEdited && !message.isDeleted) {
+      return "$hour:$minute Edited";
+    }
+    return "$hour:$minute";
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -82,31 +103,49 @@ class MessageBubble extends StatelessWidget {
                       ),
                     ],
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        message.content,
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: isMyMessage
-                              ? Colors.white
-                              : AppTheme.textPrimaryColor,
-                        ),
-                      ),
-                      if (message.isEdited) ...[
-                        SizedBox(height: 4),
+                  child: IntrinsicWidth(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
                         Text(
-                          "Edited",
-                          style: Theme.of(context).textTheme.bodySmall
+                          message.content,
+                          style: Theme.of(context).textTheme.bodyMedium
                               ?.copyWith(
-                                color: isMyMessage
-                                    ? Colors.white.withOpacity(0.7)
-                                    : AppTheme.textSecondaryColor,
-                                fontStyle: FontStyle.italic,
+                                color: message.isDeleted
+                                    ? (isMyMessage
+                                          ? Colors.white.withOpacity(0.6)
+                                          : Colors.grey[500])
+                                    : (isMyMessage
+                                          ? Colors.white
+                                          : AppTheme.textPrimaryColor),
+                                fontStyle: message.isDeleted
+                                    ? FontStyle.italic
+                                    : FontStyle.normal,
                               ),
                         ),
+                        if (!message.isDeleted) ...[
+                          SizedBox(height: 4),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.start,
+                            children: [
+                              Text(
+                                _getFormattedTime(),
+                                style: Theme.of(context).textTheme.bodySmall
+                                    ?.copyWith(
+                                      fontSize: 10,
+                                      color: isMyMessage
+                                          ? Colors.white.withOpacity(0.65)
+                                          : AppTheme.textSecondaryColor,
+                                      fontStyle: message.isEdited
+                                          ? FontStyle.italic
+                                          : FontStyle.normal,
+                                    ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
                 ),
               ),

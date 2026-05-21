@@ -1,4 +1,6 @@
+import 'package:chat_app/controllers/auth_controller.dart';
 import 'package:chat_app/controllers/main_controller.dart';
+import 'package:chat_app/services/firestore_service.dart';
 import 'package:chat_app/themes/app_theme.dart';
 import 'package:chat_app/views/find_people_view.dart';
 import 'package:chat_app/views/home_view.dart';
@@ -7,8 +9,59 @@ import 'package:chat_app/views/friends_view.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
-class MainScreen extends GetView<MainController> {
+class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
+
+  @override
+  State<MainScreen> createState() => _MainScreenState();
+}
+
+class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
+  late final FirestoreService _firestoreService;
+  late final AuthController _authController;
+  late final MainController controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _firestoreService = FirestoreService();
+    _authController = Get.find<AuthController>();
+    controller = Get.find<MainController>();
+    WidgetsBinding.instance.addObserver(this);
+    _setOnlineStatus(true);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _setOnlineStatus(false);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+
+    switch (state) {
+      case AppLifecycleState.resumed:
+        _setOnlineStatus(true);
+        break;
+      case AppLifecycleState.detached:
+      case AppLifecycleState.paused:
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.hidden:
+        _setOnlineStatus(false);
+        break;
+    }
+  }
+
+  void _setOnlineStatus(bool isOnline) {
+    final currentUserId = _authController.user?.uid;
+
+    if (currentUserId != null) {
+      _firestoreService.updateUserOnlineStatus(currentUserId, isOnline);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -17,9 +70,6 @@ class MainScreen extends GetView<MainController> {
         controller: controller.pageController,
         onPageChanged: controller.onPageChanged,
         children: [
-          // HomeScreen(),
-          // FriendScreen(),
-          // UsersListScreen(),
           HomeScreen(),
           FriendsScreen(),
           FindPeopleScreen(),

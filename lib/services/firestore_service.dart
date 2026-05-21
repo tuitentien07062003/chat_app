@@ -308,9 +308,32 @@ class FirestoreService {
       String friendShipId = '${userIds[0]}_ ${userIds[1]}';
 
       await _firestore.collection('friendships').doc(friendShipId).update({
+        'id': friendShipId,
+        'userId': userIds[0],
+        'friendId': userIds[1],
+        'createdAt': DateTime.now().millisecondsSinceEpoch,
         'isBlocked': true,
         'blockedBy': blockerId,
       });
+
+      QuerySnapshot sentRequests = await _firestore
+          .collection('friendRequests')
+          .where('senderId', isEqualTo: blockerId)
+          .where('receiverId', isEqualTo: blockedId)
+          .get();
+
+      QuerySnapshot receivedRequests = await _firestore
+          .collection('friendRequests')
+          .where('senderId', isEqualTo: blockedId)
+          .where('receiverId', isEqualTo: blockerId)
+          .get();
+
+      for (var doc in sentRequests.docs) {
+        await doc.reference.delete();
+      }
+      for (var doc in receivedRequests.docs) {
+        await doc.reference.delete();
+      }
     } catch (e) {
       throw Exception(
         '${e.toString()} An error occurred while responding to block friend',
@@ -325,10 +348,7 @@ class FirestoreService {
 
       String friendShipId = '${userIds[0]}_ ${userIds[1]}';
 
-      await _firestore.collection('friendships').doc(friendShipId).update({
-        'isBlocked': false,
-        'blockedBy': null,
-      });
+      await _firestore.collection('friendships').doc(friendShipId).delete();
     } catch (e) {
       throw Exception(
         '${e.toString()} An error occurred while responding to block friend',
@@ -336,32 +356,89 @@ class FirestoreService {
     }
   }
 
+  Stream<List<FriendshipModel>> getBlockedUsersStream(String userId) {
+    return _firestore
+        .collection('friendships')
+        .where('isBlocked', isEqualTo: true)
+        .where('blockedBy', isEqualTo: userId)
+        .snapshots()
+        .map((snapshot) {
+          return snapshot.docs
+              .map(
+                (doc) =>
+                    FriendshipModel.fromMap(doc.data() as Map<String, dynamic>),
+              )
+              .toList();
+        });
+  }
+
   Stream<List<FriendshipModel>> getFriendsStream(String userId) {
     return _firestore
         .collection('friendships')
-        .where('userId', isEqualTo: userId)
+        .where(
+          Filter.or(
+            Filter('userId', isEqualTo: userId),
+            Filter('friendId', isEqualTo: userId),
+          ),
+        )
         .snapshots()
-        .asyncMap((snapshot1) async {
-          QuerySnapshot snapshot2 = await _firestore
-              .collection('friendships')
-              .where('friendId', isEqualTo: userId)
-              .get();
+        .map((snapshot) {
+          return snapshot.docs
+              .map(
+                (doc) =>
+                    FriendshipModel.fromMap(doc.data() as Map<String, dynamic>),
+              )
+              .where((f) => !f.isBlocked)
+              .toList();
+        });
+  }
 
-          List<FriendshipModel> friendships = [];
+  // Stream<List<FriendshipModel>> getFriendsStream(String userId) {
+  //   return _firestore
+  //       .collection('friendships')
+  //       .where('userId', isEqualTo: userId)
+  //       .snapshots()
+  //       .asyncMap((snapshot1) async {
+  //         QuerySnapshot snapshot2 = await _firestore
+  //             .collection('friendships')
+  //             .where('friendId', isEqualTo: userId)
+  //             .get();
 
-          for (var doc in snapshot1.docs) {
-            friendships.add(
-              FriendshipModel.fromMap(doc.data() as Map<String, dynamic>),
-            );
-          }
+  //         List<FriendshipModel> friendships = [];
 
-          for (var doc in snapshot2.docs) {
-            friendships.add(
-              FriendshipModel.fromMap(doc.data() as Map<String, dynamic>),
-            );
-          }
+  //         for (var doc in snapshot1.docs) {
+  //           friendships.add(
+  //             FriendshipModel.fromMap(doc.data() as Map<String, dynamic>),
+  //           );
+  //         }
 
-          return friendships.where((f) => !f.isBlocked).toList();
+  //         for (var doc in snapshot2.docs) {
+  //           friendships.add(
+  //             FriendshipModel.fromMap(doc.data() as Map<String, dynamic>),
+  //           );
+  //         }
+
+  //         return friendships.where((f) => !f.isBlocked).toList();
+  //       });
+  // }
+
+  Stream<List<FriendshipModel>> getAllRelationshipsStream(String userId) {
+    return _firestore
+        .collection('friendships')
+        .where(
+          Filter.or(
+            Filter('userId', isEqualTo: userId),
+            Filter('friendId', isEqualTo: userId),
+          ),
+        )
+        .snapshots()
+        .map((snapshot) {
+          return snapshot.docs
+              .map(
+                (doc) =>
+                    FriendshipModel.fromMap(doc.data() as Map<String, dynamic>),
+              )
+              .toList();
         });
   }
 
@@ -431,7 +508,12 @@ class FirestoreService {
           .doc(friendShipId)
           .get();
 
-      return !doc.exists || (doc.exists && doc.data() == null);
+      if (!doc.exists || doc.data() == null) return true;
+
+      FriendshipModel friendship = FriendshipModel.fromMap(
+        doc.data() as Map<String, dynamic>,
+      );
+      return friendship.isBlocked;
     } catch (e) {
       throw Exception(
         '${e.toString()} An error occurred while responding to ...',
@@ -574,7 +656,7 @@ class FirestoreService {
   Future<void> restoreUnreadCount(String chatId, String userId) async {
     try {
       await _firestore.collection('chats').doc(chatId).update({
-        'unreadCounts.$userId': count,
+        'unreadCounts.$userId': 0,
       });
     } catch (e) {
       throw Exception(
@@ -611,9 +693,26 @@ class FirestoreService {
         );
 
         int currentUnread = chat.getUnreadCount(message.receiverId);
-
         await updateUnreadCount(chatId, message.receiverId, currentUnread + 1);
       }
+
+      final notiId = _firestore.collection("notifications").doc().id;
+      NotificationModel noti = NotificationModel(
+        id: notiId,
+        userId: message.receiverId,
+        title: "Bạn nhận được tin nhắn mới",
+        body: message.content,
+        type: NotificationType.newMessage,
+        createdAt: DateTime.now(),
+        isRead: false,
+        data: {
+          "chatId": chatId,
+          "senderId": message.senderId,
+          "userId": message.senderId,
+        },
+      );
+
+      await createNotification(noti);
     } catch (e) {
       throw Exception(
         '${e.toString()} An error occurred while responding to send message',
@@ -682,7 +781,11 @@ class FirestoreService {
 
   Future<void> deleteMessage(String messageId) async {
     try {
-      await _firestore.collection('messages').doc(messageId).delete();
+      await _firestore.collection('messages').doc(messageId).update({
+        'isDeleted': true,
+        'content': 'Tin nhắn đã bị xóa',
+        'deletedAt': DateTime.now().millisecondsSinceEpoch,
+      });
     } catch (e) {
       throw Exception(
         '${e.toString()} An error occurred while responding to delete message',
@@ -694,7 +797,7 @@ class FirestoreService {
     try {
       await _firestore.collection('messages').doc(messageId).update({
         'content': newContent,
-        'isEdit': true,
+        'isEdited': true,
         'editedAt': DateTime.now().millisecondsSinceEpoch,
       });
     } catch (e) {

@@ -130,6 +130,7 @@ class FriendsController extends GetxController {
             "Are you sure you want to unfriend ${friend.displayName} from list friend?",
           ),
           actions: [
+            TextButton(onPressed: () => Get.back(), child: Text("Cancel")),
             TextButton(
               onPressed: () => Get.back(result: true),
               style: TextButton.styleFrom(foregroundColor: Colors.redAccent),
@@ -170,11 +171,12 @@ class FriendsController extends GetxController {
     try {
       final results = await Get.dialog<bool>(
         AlertDialog(
-          title: Text("Block User"),
+          title: Text("Block Friend"),
           content: Text(
             "Are you sure you want to block ${friend.displayName}?",
           ),
           actions: [
+            TextButton(onPressed: () => Get.back(), child: Text("Cancel")),
             TextButton(
               onPressed: () => Get.back(result: true),
               style: TextButton.styleFrom(foregroundColor: Colors.redAccent),

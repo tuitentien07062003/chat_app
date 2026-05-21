@@ -11,6 +11,7 @@ import 'package:chat_app/views/auth/forgot_password_view.dart';
 import 'package:chat_app/views/auth/login_view.dart';
 import 'package:chat_app/views/auth/register_view.dart';
 import 'package:chat_app/views/auth/splash_view.dart';
+import 'package:chat_app/views/blocked_user_view.dart';
 import 'package:chat_app/views/chat_view.dart';
 import 'package:chat_app/views/find_people_view.dart';
 import 'package:chat_app/views/friend_requests_view.dart';
@@ -95,6 +96,13 @@ class AppPages {
       page: () => NotificationScreen(),
       binding: BindingsBuilder(() {
         Get.put(NotificationsController());
+      }),
+    ),
+    GetPage(
+      name: AppRoutes.blockedUser,
+      page: () => BlockedUsersScreen(),
+      binding: BindingsBuilder(() {
+        Get.put(UsersListController());
       }),
     ),
   ];

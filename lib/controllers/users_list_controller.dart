@@ -84,7 +84,7 @@ class UsersListController extends GetxController {
       );
 
       _friendships.bindStream(
-        _firestoreService.getFriendsStream(currentUserId),
+        _firestoreService.getAllRelationshipsStream(currentUserId),
       );
 
       ever(_sentRequests, (_) => _updateAllRelationshipsStatus());
@@ -420,6 +420,10 @@ class UsersListController extends GetxController {
         return "Last seen on ${user.lastSeen.day}/${user.lastSeen.month}/${user.lastSeen.year}";
       }
     }
+  }
+
+  void openBlockedList() {
+    Get.toNamed(AppRoutes.blockedUser);
   }
 
   void clearError() {
