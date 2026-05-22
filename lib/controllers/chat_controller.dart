@@ -7,6 +7,7 @@ import 'package:chat_app/services/firestore_service.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:uuid/uuid.dart';
+import 'package:flutter/services.dart';
 
 class ChatController extends GetxController {
   final FirestoreService _firestoreService = FirestoreService();
@@ -112,7 +113,7 @@ class ChatController extends GetxController {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController != null && _scrollController!.hasClients) {
         _scrollController!.animateTo(
-          _scrollController!.position.maxScrollExtent,
+          0.0,
           duration: Duration(milliseconds: 300),
           curve: Curves.easeOut,
         );
@@ -350,7 +351,12 @@ class ChatController extends GetxController {
   Future<void> deleteMessage(MessageModel mess) async {
     try {
       await _firestoreService.deleteMessage(mess.id);
-      Get.snackbar("Success", "Message Delete");
+      if (_messages.isNotEmpty && _messages.last.id == mess.id) {
+        await _firestoreService.updateChatLastMessage(
+          _chatId.value,
+          "Tin nhắn đã bị xóa",
+        );
+      }
     } catch (e) {
       Get.snackbar("Error", "Failed to delete message");
       print(e);
@@ -360,7 +366,15 @@ class ChatController extends GetxController {
   Future<void> editMessage(MessageModel mess, String newContent) async {
     try {
       await _firestoreService.editMessage(mess.id, newContent);
-      Get.snackbar("Success", "Message Edit");
+
+      if (_chatId.value.isNotEmpty &&
+          _messages.isNotEmpty &&
+          _messages.last.id == mess.id) {
+        await _firestoreService.updateChatLastMessage(
+          _chatId.value,
+          newContent,
+        );
+      }
     } catch (e) {
       Get.snackbar("Error", "Failed to edit message");
       print(e);
@@ -386,6 +400,129 @@ class ChatController extends GetxController {
       return "${days[timestamp.weekday - 1]} ${timestamp.hour.toString().padLeft(2, '0')}:${timestamp.minute.toString().padLeft(2, '0')}";
     } else {
       return "${timestamp.day}/${timestamp.month}/${timestamp.year}";
+    }
+  }
+
+  Future<void> sendIconMessage(String emoji) async {
+    final currentUserId = _authController.user?.uid;
+    final otherUserId = _otherUser.value?.id;
+    if (currentUserId == null || otherUserId == null || _chatId.value.isEmpty)
+      return;
+
+    final messageId = _uuid.v4();
+    final message = MessageModel(
+      id: messageId,
+      senderId: currentUserId,
+      receiverId: otherUserId,
+      type: MessageType.icon,
+      content: emoji,
+      timestamp: DateTime.now(),
+      replyToId: replyingMessage.value?.id,
+      replyToContent: replyingMessage.value?.content,
+      replyToSenderId: replyingMessage.value?.senderId,
+      replyToTimestamp: replyingMessage.value?.timestamp,
+    );
+
+    try {
+      await _firestoreService.sendMessage(message);
+      replyingMessage.value = null;
+    } catch (e) {
+      Get.snackbar("Error", "Không thể gửi icon");
+    }
+  }
+
+  Future<void> toggleReaction(MessageModel message, String emoji) async {
+    final currentUserId = _authController.user?.uid;
+    if (currentUserId == null) return;
+
+    String? targetIcon = message.reactions[currentUserId] == emoji
+        ? null
+        : emoji;
+
+    try {
+      await _firestoreService.updateMessageReaction(
+        message.id,
+        currentUserId,
+        targetIcon,
+      );
+    } catch (e) {
+      print("Lỗi thả cảm xúc: $e");
+    }
+  }
+
+  void copyMessage(String content) {
+    Clipboard.setData(ClipboardData(text: content));
+    Get.snackbar(
+      "Thành công",
+      "Đã sao chép tin nhắn",
+      snackPosition: SnackPosition.TOP,
+      backgroundColor: Colors.black87,
+      colorText: Colors.white,
+      duration: const Duration(seconds: 2),
+    );
+  }
+
+  Future<void> forwardMessage(
+    MessageModel originalMessage,
+    UserModel targetUser,
+  ) async {
+    final currentUserId = _authController.user?.uid;
+    if (currentUserId == null) return;
+
+    final messageId = _uuid.v4();
+    final message = MessageModel(
+      id: messageId,
+      senderId: currentUserId,
+      receiverId: targetUser.id,
+      type: originalMessage.type,
+      content: originalMessage.content,
+      timestamp: DateTime.now(),
+    );
+
+    try {
+      await _firestoreService.sendMessage(message);
+    } catch (e) {
+      Get.snackbar("Lỗi", "Không thể chuyển tiếp tin nhắn");
+      print(e);
+    }
+  }
+
+  Future<List<UserModel>> getForwardableFriends() async {
+    final currentUserId = _authController.user?.uid;
+    if (currentUserId == null) return [];
+
+    try {
+      List<UserModel> friends = await _firestoreService.getForwardableFriends(
+        currentUserId,
+      );
+
+      final currentChatPartnerId = _otherUser.value?.id;
+      if (currentChatPartnerId != null) {
+        friends.removeWhere((user) => user.id == currentChatPartnerId);
+      }
+
+      return friends;
+    } catch (e) {
+      print("Lỗi lấy danh sách bạn bè: $e");
+      return [];
+    }
+  }
+
+  String getDynamicReplyContent(MessageModel message) {
+    if (message.replyToId == null) return message.replyToContent ?? "";
+
+    try {
+      final originalMsg = _messages.firstWhere(
+        (m) => m.id == message.replyToId,
+      );
+
+      if (originalMsg.isDeleted) {
+        return "Tin nhắn đã bị xóa";
+      }
+
+      return originalMsg.content;
+    } catch (e) {
+      return message.replyToContent ?? "";
     }
   }
 

@@ -521,6 +521,50 @@ class FirestoreService {
     }
   }
 
+  Future<List<UserModel>> getForwardableFriends(String userId) async {
+    try {
+      QuerySnapshot snapshot = await _firestore
+          .collection('friendships')
+          .where(
+            Filter.or(
+              Filter('userId', isEqualTo: userId),
+              Filter('friendId', isEqualTo: userId),
+            ),
+          )
+          .get();
+
+      List<String> friendIds = [];
+
+      for (var doc in snapshot.docs) {
+        Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+        bool isBlocked = data['isBlocked'] ?? false;
+
+        if (!isBlocked) {
+          String otherId = data['userId'] == userId
+              ? data['friendId']
+              : data['userId'];
+          friendIds.add(otherId);
+        }
+      }
+
+      if (friendIds.isEmpty) return [];
+
+      List<UserModel> validFriends = [];
+      for (String id in friendIds) {
+        UserModel? user = await getUser(id);
+        if (user != null) {
+          validFriends.add(user);
+        }
+      }
+
+      return validFriends;
+    } catch (e) {
+      throw Exception(
+        '${e.toString()} An error occurred while fetching forwardable friends',
+      );
+    }
+  }
+
   // CHAT
 
   Future<DocumentSnapshot> getChatDoc(String chatId) async {
@@ -592,15 +636,12 @@ class FirestoreService {
         );
   }
 
-  Future<void> updateChatLastMessage(
-    String chatId,
-    MessageModel message,
-  ) async {
+  Future<void> updateChatLastMessage(String chatId, String message) async {
     try {
       await _firestore.collection('chats').doc(chatId).update({
-        'lastMessage': message.content,
-        'lastMessageTime': message.timestamp.microsecondsSinceEpoch,
-        'lastMessageSenderId': message.senderId,
+        'lastMessage': message,
+        // 'lastMessageTime': message.timestamp.microsecondsSinceEpoch,
+        // 'lastMessageSenderId': message.senderId,
         'updatedAt': DateTime.now().millisecondsSinceEpoch,
       });
     } catch (e) {
@@ -689,7 +730,7 @@ class FirestoreService {
         message.receiverId,
       );
 
-      await updateChatLastMessage(chatId, message);
+      await updateChatLastMessage(chatId, message.content);
       await updateUserLastSeen(chatId, message.senderId);
 
       DocumentSnapshot chatDoc = await _firestore
@@ -706,12 +747,17 @@ class FirestoreService {
         await updateUnreadCount(chatId, message.receiverId, currentUnread + 1);
       }
 
+      String notificationBody = message.content;
+      if (message.type == MessageType.icon) {
+        notificationBody = "👍 Đã gửi một icon";
+      }
+
       final notiId = _firestore.collection("notifications").doc().id;
       NotificationModel noti = NotificationModel(
         id: notiId,
         userId: message.receiverId,
         title: "Bạn nhận được tin nhắn mới",
-        body: message.content,
+        body: notificationBody,
         type: NotificationType.newMessage,
         createdAt: DateTime.now(),
         isRead: false,
@@ -772,9 +818,26 @@ class FirestoreService {
               }
             }
           }
-          messages.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+          messages.sort((a, b) => b.timestamp.compareTo(a.timestamp));
           return messages;
         });
+  }
+
+  Future<void> updateMessageReaction(
+    String messageId,
+    String userId,
+    String? iconName,
+  ) async {
+    try {
+      final docRef = _firestore.collection('messages').doc(messageId);
+      if (iconName == null) {
+        await docRef.update({'reactions.$userId': FieldValue.delete()});
+      } else {
+        await docRef.update({'reactions.$userId': iconName});
+      }
+    } catch (e) {
+      throw Exception('Error updating reaction: ${e.toString()}');
+    }
   }
 
   Future<void> markMessageAsRead(String messageId) async {

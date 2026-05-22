@@ -1,4 +1,7 @@
 import 'package:chat_app/controllers/chat_controller.dart';
+import 'package:chat_app/models/fa_icon_helper.dart';
+import 'package:chat_app/models/message_model.dart';
+import 'package:chat_app/models/user_model.dart';
 import 'package:chat_app/themes/app_theme.dart';
 import 'package:chat_app/views/widgets/message_bubble.dart';
 import 'package:flutter/material.dart';
@@ -146,6 +149,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
               }
               return ListView.builder(
                 controller: controller.scrollController,
+                reverse: true,
                 padding: EdgeInsets.all(16),
                 itemCount: controller.messages.length,
                 itemBuilder: (context, index) {
@@ -168,7 +172,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                     isMyMessage: isMyMessage,
                     showTime: showTime,
                     timeText: controller.formatMessTime(message.timestamp),
-                    onLongPress: isMyMessage && !message.isDeleted
+                    dynamicReplyContent: controller.getDynamicReplyContent(
+                      message,
+                    ),
+                    onLongPress: !message.isDeleted
                         ? () => _showMessageOptions(message)
                         : null,
                     onSwipeToReply: () => controller.startReply(message),
@@ -328,6 +335,61 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                         onSubmitted: (_) => controller.sendMessage(),
                       ),
                     ),
+
+                    IconButton(
+                      icon: const Icon(
+                        Icons.emoji_emotions_outlined,
+                        color: Colors.grey,
+                      ),
+                      onPressed: () {
+                        Get.bottomSheet(
+                          Container(
+                            color: Colors.white,
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  "Gửi Icon nhanh",
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                GridView.builder(
+                                  shrinkWrap: true,
+                                  itemCount: EmojiHelper.stickerEmojis.length,
+                                  gridDelegate:
+                                      const SliverGridDelegateWithFixedCrossAxisCount(
+                                        crossAxisCount: 6,
+                                        mainAxisSpacing: 16,
+                                        crossAxisSpacing: 16,
+                                      ),
+                                  itemBuilder: (context, index) {
+                                    String emoji =
+                                        EmojiHelper.stickerEmojis[index];
+                                    return InkWell(
+                                      onTap: () {
+                                        Get.back();
+                                        controller.sendIconMessage(emoji);
+                                      },
+                                      child: Center(
+                                        child: Text(
+                                          emoji,
+                                          style: const TextStyle(fontSize: 32),
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
                   ],
                 ),
               ),
@@ -393,6 +455,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   }
 
   void _showMessageOptions(dynamic message) {
+    final List<String> reactionEmojis = ["👍", "❤️", "😂", "😮", "😢", "💩"];
+    final isMyMessage = controller.isMyMessage(message);
+
     Get.bottomSheet(
       Container(
         padding: EdgeInsets.all(20),
@@ -403,24 +468,102 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            ListTile(
-              leading: Icon(Icons.edit, color: AppTheme.primaryColor),
-              title: Text('Edit Message'),
-              onTap: () {
-                Get.back();
-                _showEditDialog(message);
-              },
+            Text(
+              "Thả cảm xúc",
+              style: TextStyle(color: Colors.grey[600], fontSize: 13),
             ),
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: reactionEmojis.map((emoji) {
+                bool isMyReaction =
+                    message.reactions?[controller.currentUserId] == emoji;
+                return GestureDetector(
+                  onTap: () {
+                    Get.back();
+                    controller.toggleReaction(message, emoji);
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(8.0),
+                    decoration: BoxDecoration(
+                      color: isMyReaction
+                          ? AppTheme.primaryColor.withOpacity(0.15)
+                          : Colors.transparent,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Text(emoji, style: const TextStyle(fontSize: 28)),
+                  ),
+                );
+              }).toList(),
+            ),
+            const Divider(height: 32, thickness: 1),
 
-            ListTile(
-              leading: Icon(Icons.delete, color: AppTheme.errorColor),
-              title: Text('Delete Message'),
-              onTap: () {
-                Get.back();
-                _showDeleteDialog(message);
-              },
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildActionItem(
+                  icon: Icons.copy_rounded,
+                  tooltip: "Sao chép",
+                  onTap: () {
+                    Get.back();
+                    controller.copyMessage(message.content);
+                  },
+                ),
+
+                _buildActionItem(
+                  icon: Icons.shortcut_rounded,
+                  tooltip: "Chuyển tiếp",
+                  onTap: () {
+                    Get.back();
+                    _showForwardBottomSheet(message);
+                  },
+                ),
+
+                if (isMyMessage)
+                  _buildActionItem(
+                    icon: Icons.edit_rounded,
+                    tooltip: "Chỉnh sửa",
+                    onTap: () {
+                      Get.back();
+                      _showEditDialog(message);
+                    },
+                  ),
+
+                if (isMyMessage)
+                  _buildActionItem(
+                    icon: Icons.delete_outline_rounded,
+                    tooltip: "Xóa",
+                    onTap: () {
+                      Get.back();
+                      _showDeleteDialog(message);
+                    },
+                  ),
+              ],
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActionItem({
+    required IconData icon,
+    required String tooltip,
+    required VoidCallback onTap,
+  }) {
+    return Tooltip(
+      message: tooltip,
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Colors.grey[100],
+            shape: BoxShape.circle,
+          ),
+          child: Icon(icon, color: Colors.grey[800], size: 24),
         ),
       ),
     );
@@ -468,6 +611,109 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           ),
         ],
       ),
+    );
+  }
+
+  void _showForwardBottomSheet(MessageModel message) {
+    Get.bottomSheet(
+      Container(
+        height: MediaQuery.of(context).size.height * 0.6,
+        padding: const EdgeInsets.symmetric(vertical: 20),
+        decoration: BoxDecoration(
+          color: AppTheme.cardColor,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 20),
+              child: Text(
+                "Chuyển tiếp đến",
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+            ),
+            const Divider(height: 20),
+            Expanded(
+              child: FutureBuilder<List<UserModel>>(
+                future: controller.getForwardableFriends(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+
+                  if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                    return const Center(
+                      child: Text(
+                        "Không có bạn bè nào hợp lệ để chuyển tiếp",
+                        style: TextStyle(color: Colors.grey),
+                      ),
+                    );
+                  }
+
+                  final validFriends = snapshot.data!;
+
+                  return ListView.builder(
+                    itemCount: validFriends.length,
+                    itemBuilder: (context, index) {
+                      final user = validFriends[index];
+                      return ListTile(
+                        leading: CircleAvatar(
+                          radius: 28,
+                          backgroundColor: AppTheme.primaryColor,
+                          child: user.photoUrl.isNotEmpty
+                              ? ClipOval(
+                                  child: Image.network(
+                                    user.photoUrl,
+                                    width: 56,
+                                    height: 56,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (context, error, stackTrace) {
+                                      return Text(
+                                        user.displayName.isNotEmpty
+                                            ? user.displayName[0].toUpperCase()
+                                            : '?',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 24,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                )
+                              : Text(
+                                  user.displayName.isNotEmpty
+                                      ? user.displayName[0].toUpperCase()
+                                      : '?',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                        ),
+                        title: Text(user.displayName),
+                        trailing: IconButton(
+                          icon: const Icon(
+                            Icons.send_rounded,
+                            color: AppTheme.primaryColor,
+                          ),
+                          onPressed: () {
+                            controller.forwardMessage(message, user);
+                            Get.back();
+                          },
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+      isScrollControlled: true,
     );
   }
 }

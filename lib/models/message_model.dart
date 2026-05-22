@@ -61,6 +61,7 @@ class MessageModel {
       'replyToContent': replyToContent,
       'replyToSenderId': replyToSenderId,
       'replyToTimestamp': replyToTimestamp?.millisecondsSinceEpoch,
+      'reactions': reactions,
     };
   }
 
@@ -90,6 +91,7 @@ class MessageModel {
       replyToTimestamp: map['replyToTimestamp'] != null
           ? DateTime.fromMillisecondsSinceEpoch(map['replyToTimestamp'])
           : null,
+      reactions: Map<String, String>.from(map['reactions'] ?? {}),
     );
   }
 
@@ -109,6 +111,7 @@ class MessageModel {
     String? replyToContent,
     String? replyToSenderId,
     DateTime? replyToTimestamp,
+    Map<String, String>? reactions,
   }) {
     return MessageModel(
       id: id ?? this.id,
@@ -126,6 +129,7 @@ class MessageModel {
       replyToContent: replyToContent ?? this.replyToContent,
       replyToSenderId: replyToSenderId ?? this.replyToSenderId,
       replyToTimestamp: replyToTimestamp ?? this.replyToTimestamp,
+      reactions: reactions ?? this.reactions,
     );
   }
 }

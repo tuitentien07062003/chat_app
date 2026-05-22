@@ -149,6 +149,16 @@ class ChatListScreen extends StatelessWidget {
                                         fontWeight: unreadCount > 0
                                             ? FontWeight.bold
                                             : FontWeight.normal,
+
+                                        fontStyle:
+                                            (chat.lastMessage != null &&
+                                                chat.lastMessage!
+                                                    .toLowerCase()
+                                                    .contains(
+                                                      "tin nhắn đã bị xóa",
+                                                    ))
+                                            ? FontStyle.italic
+                                            : FontStyle.normal,
                                       ),
                                   overflow: TextOverflow.ellipsis,
                                   maxLines: 1,
@@ -181,16 +191,6 @@ class ChatListScreen extends StatelessWidget {
                         ],
                       ],
                     ),
-                    if (chat.lastMessageSenderId == currentUserId) ...[
-                      SizedBox(height: 2),
-                      Text(
-                        _getSeenStatusText(),
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: _getSeenStatusColor(),
-                          fontSize: 11,
-                        ),
-                      ),
-                    ],
                   ],
                 ),
               ),
@@ -222,18 +222,6 @@ class ChatListScreen extends StatelessWidget {
       return AppTheme.primaryColor;
     } else {
       return AppTheme.textSecondaryColor;
-    }
-  }
-
-  String _getSeenStatusText() {
-    final AuthController authController = Get.find<AuthController>();
-    final currentUserId = authController.user?.uid ?? '';
-    final otherUserId = chat.getOtherParticipantId(currentUserId);
-
-    if (chat.isMessageSeen(currentUserId, otherUserId)) {
-      return "Seen";
-    } else {
-      return "Delevered";
     }
   }
 
