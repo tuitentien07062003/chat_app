@@ -150,6 +150,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                 itemCount: controller.messages.length,
                 itemBuilder: (context, index) {
                   final message = controller.messages[index];
+                  final bubbleKey = controller.messageKeys.putIfAbsent(
+                    message.id,
+                    () => GlobalKey(),
+                  );
                   final isMyMessage = controller.isMyMessage(message);
                   final showTime =
                       index == 0 ||
@@ -159,6 +163,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                               .abs() >
                           5;
                   return MessageBubble(
+                    key: bubbleKey,
                     message: message,
                     isMyMessage: isMyMessage,
                     showTime: showTime,
@@ -166,6 +171,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                     onLongPress: isMyMessage && !message.isDeleted
                         ? () => _showMessageOptions(message)
                         : null,
+                    onSwipeToReply: () => controller.startReply(message),
+                    onReplySnippetTap: () => controller.handleReplySnippetTap(
+                      message.replyToId,
+                      message.replyToTimestamp,
+                    ),
                   );
                 },
               );
@@ -242,48 +252,100 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   }
 
   Widget _buildNormalInputState() {
-    return Row(
+    return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Expanded(
-          child: Container(
+        Obx(() {
+          final replyMsg = controller.replyingMessage.value;
+          if (replyMsg == null) return SizedBox.shrink();
+
+          return Container(
+            margin: EdgeInsets.only(bottom: 8),
+            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
-              color: AppTheme.cardColor,
-              borderRadius: BorderRadius.circular(24),
+              color: AppTheme.primaryColor.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
             ),
             child: Row(
               children: [
+                Icon(Icons.reply_rounded, color: AppTheme.primaryColor),
+                SizedBox(width: 12),
                 Expanded(
-                  child: TextField(
-                    controller: controller.messageController,
-                    decoration: const InputDecoration(
-                      hintText: "Type a message",
-                      border: InputBorder.none,
-                      contentPadding: EdgeInsets.symmetric(
-                        vertical: 12,
-                        horizontal: 20,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "Đang trả lời",
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                          color: AppTheme.primaryColor,
+                        ),
                       ),
-                    ),
-                    maxLines: null,
-                    textCapitalization: TextCapitalization.sentences,
-                    onSubmitted: (_) => controller.sendMessage(),
+                      Text(
+                        replyMsg.content,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: AppTheme.textPrimaryColor,
+                        ),
+                      ),
+                    ],
                   ),
+                ),
+                IconButton(
+                  icon: Icon(Icons.close_rounded, size: 20),
+                  onPressed: controller.cancelReply,
                 ),
               ],
             ),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Container(
-          decoration: BoxDecoration(
-            color: controller.isTyping
-                ? AppTheme.primaryColor
-                : AppTheme.textSecondaryColor,
-            borderRadius: BorderRadius.circular(24),
-          ),
-          child: IconButton(
-            onPressed: controller.isSending ? null : controller.sendMessage,
-            icon: const Icon(Icons.send_rounded, color: Colors.white),
-          ),
+          );
+        }),
+        Row(
+          children: [
+            Expanded(
+              child: Container(
+                decoration: BoxDecoration(
+                  color: AppTheme.cardColor,
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: controller.messageController,
+                        decoration: const InputDecoration(
+                          hintText: "Type a message",
+                          border: InputBorder.none,
+                          contentPadding: EdgeInsets.symmetric(
+                            vertical: 12,
+                            horizontal: 20,
+                          ),
+                        ),
+                        maxLines: null,
+                        textCapitalization: TextCapitalization.sentences,
+                        onSubmitted: (_) => controller.sendMessage(),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              decoration: BoxDecoration(
+                color: controller.isTyping
+                    ? AppTheme.primaryColor
+                    : AppTheme.textSecondaryColor,
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: IconButton(
+                onPressed: controller.isSending ? null : controller.sendMessage,
+                icon: const Icon(Icons.send_rounded, color: Colors.white),
+              ),
+            ),
+          ],
         ),
       ],
     );

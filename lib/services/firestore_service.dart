@@ -523,6 +523,16 @@ class FirestoreService {
 
   // CHAT
 
+  Future<DocumentSnapshot> getChatDoc(String chatId) async {
+    try {
+      return await _firestore.collection('chats').doc(chatId).get();
+    } catch (e) {
+      throw Exception(
+        '${e.toString()} An error occurred while fetching chat document',
+      );
+    }
+  }
+
   Future<String> createOrGetChat(String userId1, String userId2) async {
     try {
       List<String> participants = [userId1, userId2];

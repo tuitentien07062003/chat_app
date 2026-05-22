@@ -1,4 +1,5 @@
 import 'package:chat_app/controllers/auth_controller.dart';
+import 'package:chat_app/models/chat_model.dart';
 import 'package:chat_app/models/friendship_model.dart';
 import 'package:chat_app/models/message_model.dart';
 import 'package:chat_app/models/user_model.dart';
@@ -12,6 +13,8 @@ class ChatController extends GetxController {
   final AuthController _authController = Get.find<AuthController>();
   final TextEditingController messageController = TextEditingController();
   final Uuid _uuid = Uuid();
+  final Rxn<MessageModel> replyingMessage = Rxn<MessageModel>();
+  final Map<String, GlobalKey> messageKeys = {};
 
   ScrollController? _scrollController;
   ScrollController get scrollController {
@@ -198,6 +201,15 @@ class ChatController extends GetxController {
     _isTyping.value = messageController.text.isNotEmpty;
   }
 
+  void startReply(MessageModel message) {
+    if (message.isDeleted) return;
+    replyingMessage.value = message;
+  }
+
+  void cancelReply() {
+    replyingMessage.value = null;
+  }
+
   Future<void> sendMessage() async {
     final currentUserId = _authController.user?.uid;
     final otherUserId = _otherUser.value?.id;
@@ -221,6 +233,9 @@ class ChatController extends GetxController {
     try {
       _isSending.value = true;
 
+      final replyMsg = replyingMessage.value;
+      replyingMessage.value = null;
+
       final message = MessageModel(
         id: _uuid.v4(),
         senderId: currentUserId,
@@ -228,6 +243,10 @@ class ChatController extends GetxController {
         content: content,
         type: MessageType.text,
         timestamp: DateTime.now(),
+        replyToId: replyMsg?.id,
+        replyToContent: replyMsg?.content,
+        replyToSenderId: replyMsg?.senderId,
+        replyToTimestamp: replyMsg?.timestamp,
       );
       await _firestoreService.sendMessage(message);
       _isTyping.value = false;
@@ -238,6 +257,70 @@ class ChatController extends GetxController {
       print(e.toString());
     } finally {
       _isSending.value = false;
+    }
+  }
+
+  Future<void> handleReplySnippetTap(
+    String? replyToId,
+    DateTime? replyTimestamp,
+  ) async {
+    if (replyToId == null || replyTimestamp == null) return;
+    final currentUserId = _authController.user?.uid;
+    if (currentUserId == null || _chatId.value.isEmpty) return;
+
+    try {
+      final chatDoc = await _firestoreService.getChatDoc(_chatId.value);
+
+      if (chatDoc.exists) {
+        ChatModel chat = ChatModel.fromMap(
+          chatDoc.data() as Map<String, dynamic>,
+        );
+        DateTime? deletedAt = chat.getDeletedAt(currentUserId);
+
+        if (deletedAt != null && replyTimestamp.isBefore(deletedAt)) {
+          Get.dialog(
+            AlertDialog(
+              title: Text("Lỗi"),
+              content: Text("Tin nhắn bạn đã xóa trước đó. Không thể xem lại."),
+              actions: [
+                TextButton(onPressed: () => Get.back(), child: Text("Đóng")),
+              ],
+            ),
+          );
+          return;
+        }
+      }
+
+      int targetIndex = messages.indexWhere((m) => m.id == replyToId);
+
+      if (targetIndex != -1) {
+        double estimatedOffset = targetIndex * 85.0;
+
+        await scrollController.animateTo(
+          estimatedOffset.clamp(0.0, scrollController.position.maxScrollExtent),
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeOut,
+        );
+
+        await Future.delayed(const Duration(milliseconds: 80));
+
+        final targetKey = messageKeys[replyToId];
+
+        if (targetKey != null && targetKey.currentContext != null) {
+          await Scrollable.ensureVisible(
+            targetKey.currentContext!,
+            duration: const Duration(milliseconds: 100),
+            curve: Curves.easeInOutCubic,
+          );
+        }
+      } else {
+        Get.snackbar(
+          "Thông báo",
+          "Tin nhắn gốc nằm ở quá xa hoặc không còn tồn tại",
+        );
+      }
+    } catch (e) {
+      print("Error check reply tap: $e");
     }
   }
 

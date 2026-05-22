@@ -1,5 +1,6 @@
 enum MessageType {
   text,
+  icon,
   // image,
   // video,
   // audio,
@@ -18,6 +19,11 @@ class MessageModel {
   final bool isDeleted;
   final DateTime? editedAt;
   final DateTime? deletedAt;
+  final String? replyToId;
+  final String? replyToContent;
+  final String? replyToSenderId;
+  final DateTime? replyToTimestamp;
+  final Map<String, String> reactions;
 
   MessageModel({
     required this.id,
@@ -31,6 +37,11 @@ class MessageModel {
     this.isDeleted = false,
     this.editedAt,
     this.deletedAt,
+    this.replyToId,
+    this.replyToContent,
+    this.replyToSenderId,
+    this.replyToTimestamp,
+    this.reactions = const {},
   });
 
   Map<String, dynamic> toMap() {
@@ -46,6 +57,10 @@ class MessageModel {
       'isDeleted': isDeleted,
       'editedAt': editedAt?.millisecondsSinceEpoch,
       'deletedAt': deletedAt?.millisecondsSinceEpoch,
+      'replyToId': replyToId,
+      'replyToContent': replyToContent,
+      'replyToSenderId': replyToSenderId,
+      'replyToTimestamp': replyToTimestamp?.millisecondsSinceEpoch,
     };
   }
 
@@ -69,6 +84,12 @@ class MessageModel {
       deletedAt: map['deletedAt'] != null
           ? DateTime.fromMillisecondsSinceEpoch(map['deletedAt'])
           : null,
+      replyToId: map['replyToId'],
+      replyToContent: map['replyToContent'],
+      replyToSenderId: map['replyToSenderId'],
+      replyToTimestamp: map['replyToTimestamp'] != null
+          ? DateTime.fromMillisecondsSinceEpoch(map['replyToTimestamp'])
+          : null,
     );
   }
 
@@ -84,6 +105,10 @@ class MessageModel {
     bool? isDeleted,
     DateTime? editedAt,
     DateTime? deletedAt,
+    String? replyToId,
+    String? replyToContent,
+    String? replyToSenderId,
+    DateTime? replyToTimestamp,
   }) {
     return MessageModel(
       id: id ?? this.id,
@@ -97,6 +122,10 @@ class MessageModel {
       isDeleted: isDeleted ?? this.isDeleted,
       editedAt: editedAt ?? this.editedAt,
       deletedAt: deletedAt ?? this.deletedAt,
+      replyToId: replyToId ?? this.replyToId,
+      replyToContent: replyToContent ?? this.replyToContent,
+      replyToSenderId: replyToSenderId ?? this.replyToSenderId,
+      replyToTimestamp: replyToTimestamp ?? this.replyToTimestamp,
     );
   }
 }
