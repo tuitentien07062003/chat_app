@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:chat_app/controllers/auth_controller.dart';
 import 'package:chat_app/models/chat_model.dart';
 import 'package:chat_app/models/friendship_model.dart';
@@ -47,10 +48,23 @@ class ChatController extends GetxController {
   String get currentUserId => _authController.user?.uid ?? '';
   final ImagePicker _picker = ImagePicker();
 
+  Timer? _typingTimer;
+  final RxBool isOtherUserTyping = false.obs;
+  StreamSubscription? _chatDocSub;
+
+  // ========== Tìm kiếm tin nhắn ==========
+  final RxBool isSearching = false.obs;
+  final TextEditingController searchController = TextEditingController();
+  final RxList<int> searchResultIndices = <int>[].obs;
+  final RxInt currentSearchIndex = 0.obs;
+  final Map<String, int> _messageIndexMap = {};
+  final RxString highlightedMessageId = ''.obs;
+
   @override
   void onInit() {
     super.onInit();
     _initializeChat();
+    _listenToTypingStatus();
     messageController.addListener(_onMessageChanged);
   }
 
@@ -63,6 +77,8 @@ class ChatController extends GetxController {
   @override
   void onClose() {
     _isChatActive.value = false;
+    _typingTimer?.cancel();
+    messageController.removeListener(_onMessageChanged);
     _markMessagesAsRead();
     super.onClose();
   }
@@ -76,6 +92,23 @@ class ChatController extends GetxController {
       _markMessagesAsRead();
       _listenToFriendshipRealtime();
     }
+  }
+
+  void _listenToTypingStatus() {
+    final currentUserId = _authController.user?.uid;
+    final otherUserId = _otherUser.value?.id;
+    if (currentUserId == null || otherUserId == null) return;
+
+    _chatDocSub = _firestoreService
+        .streamChatDocument(currentUserId, otherUserId)
+        .listen((doc) {
+          if (doc.exists && doc.data() != null) {
+            final data = doc.data() as Map<String, dynamic>;
+            final typingMap = data['typing'] as Map<String, dynamic>? ?? {};
+
+            isOtherUserTyping.value = typingMap[otherUserId] == true;
+          }
+        });
   }
 
   void _listenToFriendshipRealtime() {
@@ -108,7 +141,18 @@ class ChatController extends GetxController {
           _markUnreadMessagesAsRead(messageList);
         }
 
-        _scrollToBottom();
+        _messageIndexMap.clear();
+        for (int i = 0; i < messageList.length; i++) {
+          _messageIndexMap[messageList[i].id] = i;
+        }
+
+        if (isSearching.value) {
+          if (searchController.text.isNotEmpty) {
+            performSearch(searchController.text, autoScroll: false);
+          }
+        } else {
+          _scrollToBottom();
+        }
       });
     }
   }
@@ -203,7 +247,29 @@ class ChatController extends GetxController {
   }
 
   void _onMessageChanged() {
+    final isCurrentlyTyping = messageController.text.isNotEmpty;
+    if (_isTyping.value == isCurrentlyTyping) return;
+
     _isTyping.value = messageController.text.isNotEmpty;
+
+    final currentUserId = _authController.user?.uid;
+    final otherUserId = _otherUser.value?.id;
+    if (currentUserId == null || otherUserId == null) return;
+
+    _firestoreService.updateTypingStatus(
+      currentUserId,
+      otherUserId,
+      isCurrentlyTyping,
+    );
+
+    // Nếu đang gõ -> Mở Timer 3 giây. Nếu ngừng gõ 3s -> Tự tắt
+    _typingTimer?.cancel();
+    if (isCurrentlyTyping) {
+      _typingTimer = Timer(const Duration(minutes: 3), () {
+        _isTyping.value = false;
+        _firestoreService.updateTypingStatus(currentUserId, otherUserId, false);
+      });
+    }
   }
 
   void startReply(MessageModel message) {
@@ -237,6 +303,9 @@ class ChatController extends GetxController {
 
     try {
       _isSending.value = true;
+
+      _typingTimer?.cancel();
+      _firestoreService.updateTypingStatus(currentUserId, otherUserId, false);
 
       final replyMsg = replyingMessage.value;
       replyingMessage.value = null;
@@ -530,112 +599,6 @@ class ChatController extends GetxController {
     }
   }
 
-  // Future<void> sendImageMessage() async {
-  //   final XFile? pickedImage = await _picker.pickImage(
-  //     source: ImageSource.gallery,
-  //     imageQuality: 70,
-  //   );
-
-  //   final currentUserId = _authController.user?.uid;
-  //   final otherUserId = _otherUser.value?.id;
-  //   if (currentUserId == null || otherUserId == null) return;
-  //   if (pickedImage == null) return;
-
-  //   try {
-  //     _isSending.value = true;
-
-  //     // ĐỌC BYTES AN TOÀN: XFile hỗ trợ readAsBytes() trên cả Web lẫn Mobile
-  //     final Uint8List fileBytes = await pickedImage.readAsBytes();
-  //     final String fileName = pickedImage.name;
-
-  //     // Gọi service truyền bytes đi
-  //     String imageUrl = await _firestoreService.uploadToCloudinary(
-  //       fileBytes,
-  //       fileName,
-  //       "image",
-  //     );
-
-  //     final messageId = _uuid.v4();
-  //     final message = MessageModel(
-  //       id: messageId,
-  //       senderId: currentUserId,
-  //       receiverId: otherUserId,
-  //       type: MessageType.image,
-  //       content: imageUrl,
-  //       timestamp: DateTime.now(),
-  //     );
-
-  //     await _firestoreService.sendMessage(message);
-  //     await _firestoreService.updateChatLastMessage(
-  //       _chatId.value,
-  //       "[Hình ảnh]",
-  //     );
-  //   } catch (e) {
-  //     Get.snackbar("Lỗi", "Không thể gửi ảnh");
-  //     print("Lỗi chi tiết sendImage: $e");
-  //   } finally {
-  //     _isSending.value = false;
-  //   }
-  // }
-
-  // Future<void> sendFileMessage() async {
-  //   FilePickerResult? result = await FilePicker.pickFiles(type: FileType.any);
-
-  //   if (result == null || result.files.single.name == null) return;
-
-  //   final currentUserId = _authController.user?.uid;
-  //   final otherUserId = _otherUser.value?.id;
-  //   if (currentUserId == null || otherUserId == null) return;
-
-  //   try {
-  //     _isSending.value = true;
-
-  //     Uint8List? fileBytes;
-  //     String originalName = result.files.single.name;
-
-  //     if (kIsWeb) {
-  //       fileBytes = result.files.single.bytes;
-  //     } else {
-  //       // Trên Mobile: Đọc từ đường dẫn path vật lý
-  //       if (result.files.single.path != null) {
-  //         fileBytes = await io.File(result.files.single.path!).readAsBytes();
-  //       }
-  //     }
-
-  //     if (fileBytes == null) {
-  //       throw Exception("Không thể đọc dữ liệu từ file đã chọn");
-  //     }
-
-  //     // Gọi service truyền bytes đi
-  //     String fileUrl = await _firestoreService.uploadToCloudinary(
-  //       fileBytes,
-  //       originalName,
-  //       "raw",
-  //     );
-
-  //     final messageId = _uuid.v4();
-  //     final message = MessageModel(
-  //       id: messageId,
-  //       senderId: currentUserId,
-  //       receiverId: otherUserId,
-  //       type: MessageType.file,
-  //       content: '$fileUrl|$originalName',
-  //       timestamp: DateTime.now(),
-  //     );
-
-  //     await _firestoreService.sendMessage(message);
-  //     await _firestoreService.updateChatLastMessage(
-  //       _chatId.value,
-  //       "[Tập tin] $originalName",
-  //     );
-  //   } catch (e) {
-  //     Get.snackbar("Lỗi", "Không thể gửi file");
-  //     print("Lỗi chi tiết sendFile: $e");
-  //   } finally {
-  //     _isSending.value = false;
-  //   }
-  // }
-
   Future<void> openFilePickerAndUpload(BuildContext context) async {
     final currentUserId = _authController.user?.uid;
     final otherUserId = _otherUser.value?.id;
@@ -732,6 +695,99 @@ class ChatController extends GetxController {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Có lỗi xảy ra: ${e.toString()}')));
+    }
+  }
+
+  // ========== Tìm kiếm tin nhắn ==========
+  void performSearch(String query, {bool autoScroll = true}) {
+    if (query.trim().isEmpty) {
+      searchResultIndices.clear();
+      return;
+    }
+
+    final lowerQuery = query.toLowerCase();
+    searchResultIndices.clear();
+
+    for (int i = 0; i < _messages.length; i++) {
+      if (_messages[i].type == MessageType.text &&
+          !_messages[i].isDeleted &&
+          _messages[i].content.toLowerCase().contains(lowerQuery)) {
+        searchResultIndices.add(i);
+      }
+    }
+
+    if (searchResultIndices.isNotEmpty) {
+      currentSearchIndex.value = 0;
+      scrollToSearchResult();
+    }
+  }
+
+  void scrollToSearchResult() async {
+    if (searchResultIndices.isEmpty) return;
+
+    int targetIndex = searchResultIndices[currentSearchIndex.value];
+
+    String targetMessageId = _messages[targetIndex].id;
+
+    highlightedMessageId.value = targetMessageId;
+
+    final key = messageKeys[targetMessageId];
+    if (key != null && key.currentContext != null) {
+      Scrollable.ensureVisible(
+        key.currentContext!,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+        alignment: 0.5,
+      );
+    } else {
+      if (scrollController.hasClients) {
+        double estimatedOffset = targetIndex * 80.0;
+        double maxScroll = scrollController.position.maxScrollExtent;
+
+        await scrollController.animateTo(
+          estimatedOffset > maxScroll ? maxScroll : estimatedOffset,
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeInOut,
+        );
+        await Future.delayed(const Duration(milliseconds: 200));
+
+        final newKey = messageKeys[targetMessageId];
+        if (newKey != null && newKey.currentContext != null) {
+          Scrollable.ensureVisible(
+            newKey.currentContext!,
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeInOut,
+            alignment: 0.5,
+          );
+        }
+      }
+    }
+    Future.delayed(const Duration(milliseconds: 1500), () {
+      if (highlightedMessageId.value == targetMessageId) {
+        highlightedMessageId.value = '';
+      }
+    });
+  }
+
+  void nextSearchResult() {
+    if (currentSearchIndex.value < searchResultIndices.length - 1) {
+      currentSearchIndex.value++;
+      scrollToSearchResult();
+    }
+  }
+
+  void previousSearchResult() {
+    if (currentSearchIndex.value > 0) {
+      currentSearchIndex.value--;
+      scrollToSearchResult();
+    }
+  }
+
+  void toggleSearch() {
+    isSearching.value = !isSearching.value;
+    if (!isSearching.value) {
+      searchController.clear();
+      searchResultIndices.clear();
     }
   }
 

@@ -1,11 +1,11 @@
 import 'package:chat_app/controllers/call_controller.dart';
 import 'package:chat_app/controllers/chat_controller.dart';
-import 'package:chat_app/models/fa_icon_helper.dart';
 import 'package:chat_app/models/message_model.dart';
 import 'package:chat_app/models/user_model.dart';
 import 'package:chat_app/themes/app_theme.dart';
 import 'package:chat_app/views/call_view.dart';
 import 'package:chat_app/views/widgets/message_bubble.dart';
+import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -42,15 +42,40 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        leading: IconButton(
-          onPressed: () {
-            Get.delete<ChatController>(tag: chatId);
-            Get.back();
-          },
-          icon: Icon(Icons.arrow_back),
-        ),
+        leading: Obx(() {
+          if (controller.isSearching.value) {
+            return IconButton(
+              icon: const Icon(Icons.arrow_back),
+              onPressed: () => controller.toggleSearch(),
+            );
+          }
+          return IconButton(
+            onPressed: () {
+              Get.delete<ChatController>(tag: chatId);
+              Get.back();
+            },
+            icon: Icon(Icons.arrow_back),
+          );
+        }),
 
         title: Obx(() {
+          if (controller.isSearching.value) {
+            return TextField(
+              controller: controller.searchController,
+              autofocus: true,
+              style: const TextStyle(
+                color: AppTheme.textPrimaryColor,
+                fontSize: 16,
+              ),
+              decoration: const InputDecoration(
+                hintText: "Tìm trong đoạn chat...",
+                hintStyle: TextStyle(color: AppTheme.textPrimaryColor),
+                border: InputBorder.none,
+              ),
+              onChanged: (val) => controller.performSearch(val),
+            );
+          }
+
           final otherUser = controller.otherUser;
           if (otherUser == null) return Text("Chat");
           return Row(
@@ -119,47 +144,81 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         }),
 
         actions: [
-          // Trong AppBar của ChatScreen
-          IconButton(
-            icon: const Icon(Icons.call),
-            onPressed: () {
-              final otherUser = controller.otherUser;
-              if (otherUser == null) return;
-              final callController = Get.find<CallController>();
-
-              // Gọi hàm tạo cuộc gọi đi
-              callController.makeCall(
-                calleeId: otherUser.id,
-                calleeName: otherUser.displayName,
-                calleePic: otherUser.photoUrl,
-              );
-
-              // Chuyển luôn sang trang Video Call
-              Get.to(() => CallScreen());
-            },
-          ),
-          PopupMenuButton<String>(
-            onSelected: (value) {
-              switch (value) {
-                case 'delete':
-                  controller.deleteChat();
-                  break;
-              }
-            },
-            itemBuilder: (context) => [
-              PopupMenuItem(
-                value: 'delete',
-                child: ListTile(
-                  leading: Icon(
-                    Icons.delete_outline,
-                    color: AppTheme.errorColor,
+          Obx(() {
+            // 🎯 NÚT ĐIỀU HƯỚNG KẾT QUẢ TÌM KIẾM
+            if (controller.isSearching.value) {
+              return Row(
+                children: [
+                  // Hiển thị số lượng: "1/5"
+                  if (controller.searchResultIndices.isNotEmpty)
+                    Text(
+                      "${controller.currentSearchIndex.value + 1}/${controller.searchResultIndices.length}",
+                      style: const TextStyle(color: AppTheme.textPrimaryColor),
+                    ),
+                  IconButton(
+                    icon: const Icon(Icons.keyboard_arrow_up),
+                    onPressed: controller.searchResultIndices.isNotEmpty
+                        ? controller.nextSearchResult
+                        : null,
                   ),
-                  title: Text('Delete Conversation'),
-                  contentPadding: EdgeInsets.zero,
+                  IconButton(
+                    icon: const Icon(Icons.keyboard_arrow_down),
+                    onPressed: controller.searchResultIndices.isNotEmpty
+                        ? controller.previousSearchResult
+                        : null,
+                  ),
+                ],
+              );
+            }
+            return Row(
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.search),
+                  onPressed: () => controller.toggleSearch(),
                 ),
-              ),
-            ],
-          ),
+                IconButton(
+                  icon: const Icon(Icons.call),
+                  onPressed: () {
+                    final otherUser = controller.otherUser;
+                    if (otherUser == null) return;
+                    final callController = Get.find<CallController>();
+
+                    // Gọi hàm tạo cuộc gọi đi
+                    callController.makeCall(
+                      calleeId: otherUser.id,
+                      calleeName: otherUser.displayName,
+                      calleePic: otherUser.photoUrl,
+                    );
+
+                    // Chuyển luôn sang trang Video Call
+                    Get.to(() => CallScreen());
+                  },
+                ),
+                PopupMenuButton<String>(
+                  onSelected: (value) {
+                    switch (value) {
+                      case 'delete':
+                        controller.deleteChat();
+                        break;
+                    }
+                  },
+                  itemBuilder: (context) => [
+                    PopupMenuItem(
+                      value: 'delete',
+                      child: ListTile(
+                        leading: Icon(
+                          Icons.delete_outline,
+                          color: AppTheme.errorColor,
+                        ),
+                        title: Text('Delete Conversation'),
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            );
+          }),
         ],
       ),
       body: Column(
@@ -188,24 +247,29 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                               .inMinutes
                               .abs() >
                           5;
-                  return MessageBubble(
-                    key: bubbleKey,
-                    message: message,
-                    isMyMessage: isMyMessage,
-                    showTime: showTime,
-                    timeText: controller.formatMessTime(message.timestamp),
-                    dynamicReplyContent: controller.getDynamicReplyContent(
-                      message,
-                    ),
-                    onLongPress: !message.isDeleted
-                        ? () => _showMessageOptions(message)
-                        : null,
-                    onSwipeToReply: () => controller.startReply(message),
-                    onReplySnippetTap: () => controller.handleReplySnippetTap(
-                      message.replyToId,
-                      message.replyToTimestamp,
-                    ),
-                  );
+
+                  return Obx(() {
+                    return MessageBubble(
+                      key: bubbleKey,
+                      message: message,
+                      isMyMessage: isMyMessage,
+                      showTime: showTime,
+                      timeText: controller.formatMessTime(message.timestamp),
+                      dynamicReplyContent: controller.getDynamicReplyContent(
+                        message,
+                      ),
+                      onLongPress: !message.isDeleted
+                          ? () => _showMessageOptions(message)
+                          : null,
+                      onSwipeToReply: () => controller.startReply(message),
+                      onReplySnippetTap: () => controller.handleReplySnippetTap(
+                        message.replyToId,
+                        message.replyToTimestamp,
+                      ),
+                      isHighlighted:
+                          controller.highlightedMessageId.value == message.id,
+                    );
+                  });
                 },
               );
             }),
@@ -252,7 +316,25 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         child: SafeArea(
           child: isBlocked
               ? _buildBlockedInputState()
-              : _buildNormalInputState(),
+              : Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (controller.isOtherUserTyping.value)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 12, bottom: 8),
+                        child: Text(
+                          "Đang soạn tin",
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: AppTheme.primaryColor,
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      ),
+                    _buildNormalInputState(),
+                  ],
+                ),
         ),
       );
     });
@@ -387,51 +469,42 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                         color: Colors.grey,
                       ),
                       onPressed: () {
+                        FocusScope.of(context).unfocus();
                         Get.bottomSheet(
-                          Container(
-                            color: Colors.white,
-                            padding: const EdgeInsets.all(16),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text(
-                                  "Gửi Icon nhanh",
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16,
-                                  ),
+                          SizedBox(
+                            height: 320,
+                            child: EmojiPicker(
+                              textEditingController:
+                                  controller.messageController,
+
+                              config: Config(
+                                checkPlatformCompatibility: true,
+                                emojiViewConfig: EmojiViewConfig(
+                                  columns: 7,
+                                  emojiSizeMax: 28,
+                                  backgroundColor: Colors.white,
                                 ),
-                                const SizedBox(height: 12),
-                                GridView.builder(
-                                  shrinkWrap: true,
-                                  itemCount: EmojiHelper.stickerEmojis.length,
-                                  gridDelegate:
-                                      const SliverGridDelegateWithFixedCrossAxisCount(
-                                        crossAxisCount: 6,
-                                        mainAxisSpacing: 16,
-                                        crossAxisSpacing: 16,
-                                      ),
-                                  itemBuilder: (context, index) {
-                                    String emoji =
-                                        EmojiHelper.stickerEmojis[index];
-                                    return InkWell(
-                                      onTap: () {
-                                        Get.back();
-                                        controller.sendIconMessage(emoji);
-                                      },
-                                      child: Center(
-                                        child: Text(
-                                          emoji,
-                                          style: const TextStyle(fontSize: 32),
-                                        ),
-                                      ),
-                                    );
-                                  },
+                                searchViewConfig: const SearchViewConfig(
+                                  backgroundColor: Colors.white,
+                                  buttonIconColor: Colors.transparent,
                                 ),
-                              ],
+                                categoryViewConfig: const CategoryViewConfig(
+                                  backgroundColor: Colors.white,
+                                  indicatorColor: AppTheme.primaryColor,
+                                  iconColorSelected: AppTheme.primaryColor,
+                                  iconColor: Colors.grey,
+                                ),
+                                bottomActionBarConfig:
+                                    const BottomActionBarConfig(
+                                      backgroundColor: Colors.white,
+                                      buttonColor: Colors.white,
+                                      buttonIconColor: Colors.grey,
+                                    ),
+                              ),
                             ),
                           ),
+                          backgroundColor: Colors.white,
+                          isScrollControlled: false,
                         );
                       },
                     ),

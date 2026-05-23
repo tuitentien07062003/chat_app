@@ -1,5 +1,4 @@
 import 'package:chat_app/controllers/auth_controller.dart';
-import 'package:chat_app/routes/app_pages.dart';
 import 'package:chat_app/routes/app_routes.dart';
 import 'package:chat_app/themes/app_theme.dart';
 import 'package:flutter/material.dart';
@@ -51,7 +50,6 @@ class _SplashScreenState extends State<SplashScreen>
 
     if (authController.isAuthenticated) {
       Get.offAllNamed(AppRoutes.main);
-      // Get.offAllNamed(AppRoutes.profile);
     } else {
       Get.offAllNamed(AppRoutes.login);
     }

@@ -398,35 +398,6 @@ class FirestoreService {
         });
   }
 
-  // Stream<List<FriendshipModel>> getFriendsStream(String userId) {
-  //   return _firestore
-  //       .collection('friendships')
-  //       .where('userId', isEqualTo: userId)
-  //       .snapshots()
-  //       .asyncMap((snapshot1) async {
-  //         QuerySnapshot snapshot2 = await _firestore
-  //             .collection('friendships')
-  //             .where('friendId', isEqualTo: userId)
-  //             .get();
-
-  //         List<FriendshipModel> friendships = [];
-
-  //         for (var doc in snapshot1.docs) {
-  //           friendships.add(
-  //             FriendshipModel.fromMap(doc.data() as Map<String, dynamic>),
-  //           );
-  //         }
-
-  //         for (var doc in snapshot2.docs) {
-  //           friendships.add(
-  //             FriendshipModel.fromMap(doc.data() as Map<String, dynamic>),
-  //           );
-  //         }
-
-  //         return friendships.where((f) => !f.isBlocked).toList();
-  //       });
-  // }
-
   Stream<List<FriendshipModel>> getAllRelationshipsStream(String userId) {
     return _firestore
         .collection('friendships')
@@ -571,6 +542,32 @@ class FirestoreService {
   }
 
   // CHAT
+
+  // 1. Cập nhật trạng thái đang gõ phím
+  Future<void> updateTypingStatus(
+    String currentUserId,
+    String receiverId,
+    bool isTyping,
+  ) async {
+    List<String> ids = [currentUserId, receiverId];
+    ids.sort();
+    String chatId = ids.join("_");
+
+    await _firestore.collection('chats').doc(chatId).set({
+      'typing': {currentUserId: isTyping},
+    }, SetOptions(merge: true));
+  }
+
+  // 2. Lắng nghe document của phòng chat xem đối phương có đang gõ không
+  Stream<DocumentSnapshot> streamChatDocument(
+    String currentUserId,
+    String receiverId,
+  ) {
+    List<String> ids = [currentUserId, receiverId];
+    ids.sort();
+    String chatId = ids.join("_");
+    return _firestore.collection('chats').doc(chatId).snapshots();
+  }
 
   Future<DocumentSnapshot> getChatDoc(String chatId) async {
     try {
