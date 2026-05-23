@@ -1,4 +1,4 @@
-enum MessageType { text, icon, image, video, audio, file }
+enum MessageType { text, icon, image, video, audio, file, call }
 
 class MessageModel {
   final String id;

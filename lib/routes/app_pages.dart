@@ -12,6 +12,7 @@ import 'package:chat_app/views/auth/login_view.dart';
 import 'package:chat_app/views/auth/register_view.dart';
 import 'package:chat_app/views/auth/splash_view.dart';
 import 'package:chat_app/views/blocked_user_view.dart';
+import 'package:chat_app/views/call_view.dart';
 import 'package:chat_app/views/chat_view.dart';
 import 'package:chat_app/views/find_people_view.dart';
 import 'package:chat_app/views/friend_requests_view.dart';
@@ -21,8 +22,6 @@ import 'package:chat_app/views/main_view.dart';
 import 'package:chat_app/views/notification_view.dart';
 import 'package:chat_app/views/profile/change_password_view.dart';
 import 'package:chat_app/views/profile/profile_view.dart';
-import 'package:chat_app/views/widgets/users_list_item.dart';
-import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 class AppPages {
@@ -105,5 +104,6 @@ class AppPages {
         Get.put(UsersListController());
       }),
     ),
+    GetPage(name: AppRoutes.call, page: () => CallScreen()),
   ];
 }

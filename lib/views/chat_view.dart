@@ -1,8 +1,10 @@
+import 'package:chat_app/controllers/call_controller.dart';
 import 'package:chat_app/controllers/chat_controller.dart';
 import 'package:chat_app/models/fa_icon_helper.dart';
 import 'package:chat_app/models/message_model.dart';
 import 'package:chat_app/models/user_model.dart';
 import 'package:chat_app/themes/app_theme.dart';
+import 'package:chat_app/views/call_view.dart';
 import 'package:chat_app/views/widgets/message_bubble.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -115,7 +117,27 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             ],
           );
         }),
+
         actions: [
+          // Trong AppBar của ChatScreen
+          IconButton(
+            icon: const Icon(Icons.call),
+            onPressed: () {
+              final otherUser = controller.otherUser;
+              if (otherUser == null) return;
+              final callController = Get.find<CallController>();
+
+              // Gọi hàm tạo cuộc gọi đi
+              callController.makeCall(
+                calleeId: otherUser.id,
+                calleeName: otherUser.displayName,
+                calleePic: otherUser.photoUrl,
+              );
+
+              // Chuyển luôn sang trang Video Call
+              Get.to(() => CallScreen());
+            },
+          ),
           PopupMenuButton<String>(
             onSelected: (value) {
               switch (value) {

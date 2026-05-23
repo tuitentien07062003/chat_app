@@ -1,3 +1,4 @@
+import 'package:chat_app/controllers/call_controller.dart';
 import 'package:chat_app/controllers/friends_controller.dart';
 import 'package:chat_app/controllers/home_controller.dart';
 import 'package:chat_app/controllers/notifications_controller.dart';
@@ -20,6 +21,9 @@ class MainController extends GetxController {
     Get.lazyPut(() => FriendsController());
     Get.lazyPut(() => UsersListController());
     Get.lazyPut(() => ProfileController());
+    // Get.lazyPut(() => CallController());
+
+    Get.put(CallController(), permanent: true);
 
     Get.put(NotificationsController(), permanent: true);
   }

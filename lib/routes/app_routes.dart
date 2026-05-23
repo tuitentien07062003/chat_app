@@ -14,4 +14,5 @@ class AppRoutes {
   static const String friendRequests = '/friend-requests';
   static const String notifications = '/notifications';
   static const String blockedUser = '/blocked-users';
+  static const String call = '/call';
 }

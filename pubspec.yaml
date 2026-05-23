@@ -43,6 +43,7 @@ dependencies:
   flutter_dotenv: ^6.0.1
   path: ^1.9.1
   url_launcher: ^6.3.2
+  flutter_webrtc: ^1.4.1
 
 dev_dependencies:
   flutter_test:

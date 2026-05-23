@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import 'package:chat_app/models/call_model.dart';
 import 'package:chat_app/models/chat_model.dart';
 import 'package:chat_app/models/friend_request_model.dart';
 import 'package:chat_app/models/friendship_model.dart';
@@ -754,6 +755,8 @@ class FirestoreService {
       String notificationBody = message.content;
       if (message.type == MessageType.icon) {
         notificationBody = "👍 Đã gửi một icon";
+      } else if (message.type == MessageType.call) {
+        notificationBody = "📞 ${message.content}";
       }
 
       final notiId = _firestore.collection("notifications").doc().id;
@@ -1063,5 +1066,83 @@ class FirestoreService {
     } catch (e) {
       throw Exception('Lỗi upload file: ${e.toString()}');
     }
+  }
+
+  // ========================================== CALL ===============================================
+
+  // 1. Tạo cuộc gọi mới đẩy lên Firestore
+  Future<void> createCall(CallModel call) async {
+    try {
+      await _firestore.collection('calls').doc(call.id).set(call.toMap());
+    } catch (e) {
+      throw Exception('${e.toString()} An error occurred while creating call');
+    }
+  }
+
+  // 2. Lắng nghe xem có ai đang gọi đến mình không (Dùng cho người nhận)
+  Stream<List<CallModel>> streamIncomingCalls(String currentUserId) {
+    return _firestore
+        .collection('calls')
+        .where('calleeId', isEqualTo: currentUserId)
+        .where(
+          'status',
+          whereIn: [CallStatus.calling.name, CallStatus.ringing.name],
+        )
+        .snapshots()
+        .map(
+          (snapshot) => snapshot.docs
+              .map((doc) => CallModel.fromMap(doc.data()))
+              .toList(),
+        );
+  }
+
+  // 3. Lắng nghe trạng thái hiện tại của một cuộc gọi cụ thể (Dùng cho người gọi để biết đối phương đã bắt máy chưa)
+  Stream<CallModel> streamCallStatus(String callId) {
+    return _firestore.collection('calls').doc(callId).snapshots().map((doc) {
+      if (!doc.exists) throw Exception("Cuộc gọi không tồn tại");
+      return CallModel.fromMap(doc.data()!);
+    });
+  }
+
+  // 4. Cập nhật trạng thái cuộc gọi (Ví dụ: Từ ringing -> accepted, hoặc ended)
+  Future<void> updateCallStatus(String callId, CallStatus status) async {
+    await _firestore.collection('calls').doc(callId).update({
+      'status': status.name,
+    });
+  }
+
+  // 5. Cập nhật Offer hoặc Answer
+  Future<void> updateCallData(
+    String callId,
+    String field,
+    Map<String, dynamic> data,
+  ) async {
+    await _firestore.collection('calls').doc(callId).update({field: data});
+  }
+
+  // 6. Gửi gói tin địa chỉ mạng (ICE Candidate) vào Sub-collection
+  Future<void> addCandidate(
+    String callId,
+    String collectionName,
+    Map<String, dynamic> candidate,
+  ) async {
+    await _firestore
+        .collection('calls')
+        .doc(callId)
+        .collection(collectionName)
+        .add(candidate);
+  }
+
+  // 7. Lắng nghe ICE Candidates của đối phương gửi tới
+  Stream<List<Map<String, dynamic>>> streamCandidates(
+    String callId,
+    String collectionName,
+  ) {
+    return _firestore
+        .collection('calls')
+        .doc(callId)
+        .collection(collectionName)
+        .snapshots()
+        .map((snapshot) => snapshot.docs.map((doc) => doc.data()).toList());
   }
 }
