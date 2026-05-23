@@ -311,6 +311,29 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         }),
         Row(
           children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+              child: Row(
+                children: [
+                  // 1. Nút chọn Ảnh
+                  IconButton(
+                    icon: const Icon(Icons.image, color: AppTheme.primaryColor),
+                    onPressed: () =>
+                        controller.openFilePickerAndUpload(context),
+                  ),
+                  // 2. Nút chọn File
+                  IconButton(
+                    icon: const Icon(
+                      Icons.attach_file,
+                      color: AppTheme.primaryColor,
+                    ),
+                    onPressed: () =>
+                        controller.openFilePickerAndUpload(context),
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(width: 8),
             Expanded(
               child: Container(
                 decoration: BoxDecoration(

@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:chat_app/models/chat_model.dart';
 import 'package:chat_app/models/friend_request_model.dart';
 import 'package:chat_app/models/friendship_model.dart';
@@ -5,6 +6,9 @@ import 'package:chat_app/models/message_model.dart';
 import 'package:chat_app/models/notification_model.dart';
 import 'package:chat_app/models/user_model.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:path/path.dart' as p;
+import 'package:dio/dio.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class FirestoreService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -996,6 +1000,68 @@ class FirestoreService {
       throw Exception(
         '${e.toString()} An error occurred while responding to remove noti for cancelled resquest',
       );
+    }
+  }
+
+  // IMAGE & FILE
+
+  Future<String> uploadToCloudinary(
+    Uint8List fileBytes,
+    String fileName,
+  ) async {
+    try {
+      final cloudName = dotenv.env['CLOUDINARY_CLOUD_NAME'];
+      final uploadPreset = dotenv.env['CLOUDINARY_UPLOAD_PRESET'];
+
+      if (cloudName == null || uploadPreset == null) {
+        throw Exception("Thiếu cấu hình Cloudinary trong file .env");
+      }
+
+      final String extension = p.extension(fileName).toLowerCase();
+      String resourceType = 'raw';
+
+      if ([
+        '.jpg',
+        '.jpeg',
+        '.png',
+        '.gif',
+        '.webp',
+        '.bmp',
+        '.svg',
+      ].contains(extension)) {
+        resourceType = 'image';
+      } else if ([
+        '.mp4',
+        '.mov',
+        '.avi',
+        '.mkv',
+        '.mp3',
+        '.wav',
+        '.aac',
+      ].contains(extension)) {
+        resourceType = 'video';
+      }
+
+      final String url =
+          "https://api.cloudinary.com/v1_1/$cloudName/$resourceType/upload";
+
+      FormData formData = FormData.fromMap({
+        "file": MultipartFile.fromBytes(fileBytes, filename: fileName),
+        "upload_preset": uploadPreset,
+      });
+
+      Dio dio = Dio();
+      Response response = await dio.post(url, data: formData);
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return response.data['secure_url'];
+      } else {
+        throw Exception(
+          "Lỗi từ Cloudinary: ${response.statusCode} - ${response.data}",
+        );
+      }
+    } catch (e) {
+      throw Exception('Lỗi upload file: ${e.toString()}');
     }
   }
 }

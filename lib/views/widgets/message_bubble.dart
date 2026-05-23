@@ -1,6 +1,7 @@
 import 'package:chat_app/models/message_model.dart';
 import 'package:chat_app/themes/app_theme.dart';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class MessageBubble extends StatelessWidget {
   final MessageModel message;
@@ -186,23 +187,7 @@ class MessageBubble extends StatelessWidget {
                                     ),
                                   ),
                                 ),
-
-                              Text(
-                                message.content,
-                                style: Theme.of(context).textTheme.bodyMedium
-                                    ?.copyWith(
-                                      color: message.isDeleted
-                                          ? (isMyMessage
-                                                ? Colors.white.withOpacity(0.6)
-                                                : Colors.grey[500])
-                                          : (isMyMessage
-                                                ? Colors.white
-                                                : AppTheme.textPrimaryColor),
-                                      fontStyle: message.isDeleted
-                                          ? FontStyle.italic
-                                          : FontStyle.normal,
-                                    ),
-                              ),
+                              _buildMessageContent(context),
 
                               if (!message.isDeleted) ...[
                                 const SizedBox(height: 4),
@@ -305,5 +290,116 @@ class MessageBubble extends StatelessWidget {
             : AppTheme.textSecondaryColor,
       ),
     );
+  }
+
+  Widget _buildMessageContent(BuildContext context) {
+    if (message.isDeleted) {
+      return Text(
+        message.content,
+        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+          color: isMyMessage ? Colors.white.withOpacity(0.6) : Colors.grey[500],
+          fontStyle: FontStyle.italic,
+        ),
+      );
+    }
+
+    switch (message.type) {
+      case MessageType.image:
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: Image.network(
+            message.content,
+            width: MediaQuery.of(context).size.width * 0.6,
+            fit: BoxFit.cover,
+            loadingBuilder: (context, child, loadingProgress) {
+              if (loadingProgress == null) return child;
+              return Container(
+                width: MediaQuery.of(context).size.width * 0.6,
+                height: 200,
+                color: isMyMessage ? Colors.white24 : Colors.grey[300],
+                child: Center(
+                  child: CircularProgressIndicator(
+                    color: isMyMessage ? Colors.white : AppTheme.primaryColor,
+                  ),
+                ),
+              );
+            },
+            errorBuilder: (context, error, stackTrace) => Icon(
+              Icons.broken_image,
+              size: 50,
+              color: isMyMessage ? Colors.white : Colors.grey,
+            ),
+          ),
+        );
+
+      case MessageType.file:
+        final splitData = message.content.split('|');
+        final fileUrl = splitData[0];
+        final fileName = splitData.length > 1
+            ? splitData[1]
+            : "Tập tin đính kèm";
+
+        return GestureDetector(
+          onTap: () async {
+            try {
+              final Uri url = Uri.parse(fileUrl);
+              if (await canLaunchUrl(url)) {
+                // Dùng LaunchMode.externalApplication để mở bằng trình duyệt/app bên ngoài
+                // Việc này giúp HĐH tự động xử lý việc tải file (PDF, DOCX, ZIP...) rất mượt
+                await launchUrl(url, mode: LaunchMode.externalApplication);
+              } else {
+                debugPrint("Không thể mở đường dẫn: $fileUrl");
+              }
+            } catch (e) {
+              debugPrint("Lỗi khi mở file: $e");
+            }
+          },
+          child: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: isMyMessage
+                  ? Colors.black.withOpacity(0.1)
+                  : AppTheme.primaryColor.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.insert_drive_file,
+                  color: isMyMessage ? Colors.white : AppTheme.primaryColor,
+                  size: 28,
+                ),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    fileName,
+                    style: TextStyle(
+                      color: isMyMessage
+                          ? Colors.white
+                          : AppTheme.textPrimaryColor,
+                      decoration: TextDecoration.underline,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+
+      default:
+        return Text(
+          message.content,
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            color: message.isDeleted
+                ? (isMyMessage
+                      ? Colors.white.withOpacity(0.6)
+                      : Colors.grey[500])
+                : (isMyMessage ? Colors.white : AppTheme.textPrimaryColor),
+            fontStyle: message.isDeleted ? FontStyle.italic : FontStyle.normal,
+          ),
+        );
+    }
   }
 }

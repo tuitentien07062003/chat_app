@@ -4,10 +4,13 @@ import 'package:chat_app/models/friendship_model.dart';
 import 'package:chat_app/models/message_model.dart';
 import 'package:chat_app/models/user_model.dart';
 import 'package:chat_app/services/firestore_service.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
 import 'package:flutter/services.dart';
+import 'package:path/path.dart' as p;
 
 class ChatController extends GetxController {
   final FirestoreService _firestoreService = FirestoreService();
@@ -42,6 +45,7 @@ class ChatController extends GetxController {
 
   final Rxn<FriendshipModel> friendship = Rxn<FriendshipModel>();
   String get currentUserId => _authController.user?.uid ?? '';
+  final ImagePicker _picker = ImagePicker();
 
   @override
   void onInit() {
@@ -523,6 +527,211 @@ class ChatController extends GetxController {
       return originalMsg.content;
     } catch (e) {
       return message.replyToContent ?? "";
+    }
+  }
+
+  // Future<void> sendImageMessage() async {
+  //   final XFile? pickedImage = await _picker.pickImage(
+  //     source: ImageSource.gallery,
+  //     imageQuality: 70,
+  //   );
+
+  //   final currentUserId = _authController.user?.uid;
+  //   final otherUserId = _otherUser.value?.id;
+  //   if (currentUserId == null || otherUserId == null) return;
+  //   if (pickedImage == null) return;
+
+  //   try {
+  //     _isSending.value = true;
+
+  //     // ĐỌC BYTES AN TOÀN: XFile hỗ trợ readAsBytes() trên cả Web lẫn Mobile
+  //     final Uint8List fileBytes = await pickedImage.readAsBytes();
+  //     final String fileName = pickedImage.name;
+
+  //     // Gọi service truyền bytes đi
+  //     String imageUrl = await _firestoreService.uploadToCloudinary(
+  //       fileBytes,
+  //       fileName,
+  //       "image",
+  //     );
+
+  //     final messageId = _uuid.v4();
+  //     final message = MessageModel(
+  //       id: messageId,
+  //       senderId: currentUserId,
+  //       receiverId: otherUserId,
+  //       type: MessageType.image,
+  //       content: imageUrl,
+  //       timestamp: DateTime.now(),
+  //     );
+
+  //     await _firestoreService.sendMessage(message);
+  //     await _firestoreService.updateChatLastMessage(
+  //       _chatId.value,
+  //       "[Hình ảnh]",
+  //     );
+  //   } catch (e) {
+  //     Get.snackbar("Lỗi", "Không thể gửi ảnh");
+  //     print("Lỗi chi tiết sendImage: $e");
+  //   } finally {
+  //     _isSending.value = false;
+  //   }
+  // }
+
+  // Future<void> sendFileMessage() async {
+  //   FilePickerResult? result = await FilePicker.pickFiles(type: FileType.any);
+
+  //   if (result == null || result.files.single.name == null) return;
+
+  //   final currentUserId = _authController.user?.uid;
+  //   final otherUserId = _otherUser.value?.id;
+  //   if (currentUserId == null || otherUserId == null) return;
+
+  //   try {
+  //     _isSending.value = true;
+
+  //     Uint8List? fileBytes;
+  //     String originalName = result.files.single.name;
+
+  //     if (kIsWeb) {
+  //       fileBytes = result.files.single.bytes;
+  //     } else {
+  //       // Trên Mobile: Đọc từ đường dẫn path vật lý
+  //       if (result.files.single.path != null) {
+  //         fileBytes = await io.File(result.files.single.path!).readAsBytes();
+  //       }
+  //     }
+
+  //     if (fileBytes == null) {
+  //       throw Exception("Không thể đọc dữ liệu từ file đã chọn");
+  //     }
+
+  //     // Gọi service truyền bytes đi
+  //     String fileUrl = await _firestoreService.uploadToCloudinary(
+  //       fileBytes,
+  //       originalName,
+  //       "raw",
+  //     );
+
+  //     final messageId = _uuid.v4();
+  //     final message = MessageModel(
+  //       id: messageId,
+  //       senderId: currentUserId,
+  //       receiverId: otherUserId,
+  //       type: MessageType.file,
+  //       content: '$fileUrl|$originalName',
+  //       timestamp: DateTime.now(),
+  //     );
+
+  //     await _firestoreService.sendMessage(message);
+  //     await _firestoreService.updateChatLastMessage(
+  //       _chatId.value,
+  //       "[Tập tin] $originalName",
+  //     );
+  //   } catch (e) {
+  //     Get.snackbar("Lỗi", "Không thể gửi file");
+  //     print("Lỗi chi tiết sendFile: $e");
+  //   } finally {
+  //     _isSending.value = false;
+  //   }
+  // }
+
+  Future<void> openFilePickerAndUpload(BuildContext context) async {
+    final currentUserId = _authController.user?.uid;
+    final otherUserId = _otherUser.value?.id;
+    if (currentUserId == null || otherUserId == null) return;
+
+    try {
+      FilePickerResult? result = await FilePicker.pickFiles(
+        type: FileType.any,
+        withData: true,
+      );
+
+      if (result != null && result.files.isNotEmpty) {
+        PlatformFile pickedFile = result.files.first;
+
+        Uint8List? fileBytes = pickedFile.bytes;
+        String fileName = pickedFile.name;
+
+        if (fileBytes == null) {
+          throw Exception("Không thể đọc dữ liệu byte của file này.");
+        }
+
+        if (pickedFile.size > 10 * 1024 * 1024) {
+          throw Exception(
+            "Dung lượng file quá lớn. Vui lòng chọn file dưới 15MB.",
+          );
+        }
+
+        _isSending.value = true;
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Đang upload file: $fileName...')),
+        );
+
+        String finalUrl = await _firestoreService.uploadToCloudinary(
+          fileBytes,
+          fileName,
+        );
+
+        final String extension = p.extension(fileName).toLowerCase();
+
+        MessageType msgType = MessageType.file;
+        String msgContent = '$finalUrl|$fileName';
+        String lastMsgText = "[Tập tin] $fileName";
+
+        if ([
+          '.jpg',
+          '.jpeg',
+          '.png',
+          '.gif',
+          '.webp',
+          '.bmp',
+          '.svg',
+        ].contains(extension)) {
+          msgType = MessageType.image;
+          msgContent = finalUrl;
+          lastMsgText = "[Hình ảnh]";
+        } else if (['.mp4', '.mov', '.avi', '.mkv'].contains(extension)) {
+          msgType = MessageType.video;
+          msgContent = finalUrl;
+          lastMsgText = "[Video]";
+        } else if (['.mp3', '.wav', '.aac'].contains(extension)) {
+          msgType = MessageType.audio;
+          msgContent = finalUrl;
+          lastMsgText = "[Âm thanh]";
+        }
+
+        final messageId = _uuid.v4();
+        final message = MessageModel(
+          id: messageId,
+          senderId: currentUserId,
+          receiverId: otherUserId,
+          type: msgType,
+          content: msgContent,
+          timestamp: DateTime.now(),
+        );
+
+        await _firestoreService.sendMessage(message);
+
+        await _firestoreService.updateChatLastMessage(
+          _chatId.value,
+          lastMsgText,
+        );
+
+        print("Upload thành công! Đường dẫn file online: $finalUrl");
+
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Upload thành công!')));
+      } else {
+        print("Người dùng đã hủy chọn file.");
+      }
+    } catch (e) {
+      print("Lỗi trong quá trình chọn/upload file: $e");
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Có lỗi xảy ra: ${e.toString()}')));
     }
   }
 
