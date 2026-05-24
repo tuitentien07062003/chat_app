@@ -1,14 +1,19 @@
 import 'dart:async';
+import 'dart:io' as io;
 import 'package:chat_app/controllers/auth_controller.dart';
 import 'package:chat_app/models/chat_model.dart';
 import 'package:chat_app/models/friendship_model.dart';
 import 'package:chat_app/models/message_model.dart';
 import 'package:chat_app/models/user_model.dart';
 import 'package:chat_app/services/firestore_service.dart';
+import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:record/record.dart';
 import 'package:uuid/uuid.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
@@ -60,6 +65,13 @@ class ChatController extends GetxController {
   final Map<String, int> _messageIndexMap = {};
   final RxString highlightedMessageId = ''.obs;
 
+  // ========= Voice ==========
+  final AudioRecorder _audioRecorder = AudioRecorder();
+  final RxBool isRecording = false.obs;
+  final RxInt recordDuration = 0.obs; // Tính bằng giây
+  Timer? _recordTimer;
+  String? _audioFilePath;
+
   @override
   void onInit() {
     super.onInit();
@@ -78,6 +90,8 @@ class ChatController extends GetxController {
   void onClose() {
     _isChatActive.value = false;
     _typingTimer?.cancel();
+    _recordTimer?.cancel();
+    _audioRecorder.dispose();
     messageController.removeListener(_onMessageChanged);
     _markMessagesAsRead();
     super.onClose();
@@ -699,6 +713,7 @@ class ChatController extends GetxController {
   }
 
   // ========== Tìm kiếm tin nhắn ==========
+
   void performSearch(String query, {bool autoScroll = true}) {
     if (query.trim().isEmpty) {
       searchResultIndices.clear();
@@ -789,6 +804,136 @@ class ChatController extends GetxController {
       searchController.clear();
       searchResultIndices.clear();
     }
+  }
+
+  // ========== VOICE MESSAGE ==========
+  Future<void> startRecording() async {
+    try {
+      if (await _audioRecorder.hasPermission()) {
+        if (kIsWeb) {
+          _audioFilePath = 'audio_${DateTime.now().millisecondsSinceEpoch}.aac';
+        } else {
+          final dir = await getApplicationDocumentsDirectory();
+          _audioFilePath =
+              '${dir.path}/audio_${DateTime.now().millisecondsSinceEpoch}.aac';
+        }
+
+        await _audioRecorder.start(
+          const RecordConfig(encoder: AudioEncoder.aacLc),
+          path: _audioFilePath!,
+        );
+
+        isRecording.value = true;
+        recordDuration.value = 0;
+
+        _recordTimer = Timer.periodic(const Duration(seconds: 1), (Timer t) {
+          recordDuration.value++;
+        });
+      }
+    } catch (e) {
+      print("Lỗi ghi âm: $e");
+    }
+  }
+
+  Future<void> stopAndSendRecording() async {
+    final currentUserId = _authController.user?.uid;
+    final otherUserId = _otherUser.value?.id;
+
+    _recordTimer?.cancel();
+    final path = await _audioRecorder.stop();
+    isRecording.value = false;
+
+    if (currentUserId == null || otherUserId == null) return;
+
+    if (path != null && recordDuration.value > 0) {
+      try {
+        _isSending.value = true;
+
+        Uint8List fileBytes;
+        String fileName;
+
+        if (kIsWeb) {
+          // TRƯỜNG HỢP WEB: Dùng Dio tải mớ bytes trực tiếp từ Blob URL
+          final response = await Dio().get(
+            path,
+            options: Options(responseType: ResponseType.bytes),
+          );
+          fileBytes = Uint8List.fromList(response.data as List<int>);
+          fileName = 'audio_${DateTime.now().millisecondsSinceEpoch}.aac';
+        } else {
+          // TRƯỜNG HỢP MOBILE: Đọc file từ bộ nhớ máy bằng dart:io thông thường
+          io.File audioFile = io.File(path);
+          fileBytes = await audioFile.readAsBytes();
+          fileName = p.basename(path);
+        }
+
+        String finalUrl = await _firestoreService.uploadToCloudinary(
+          fileBytes,
+          fileName,
+        );
+
+        final messageId = _uuid.v4();
+        final message = MessageModel(
+          id: messageId,
+          senderId: currentUserId,
+          receiverId: otherUserId,
+          type: MessageType.audio,
+          content: finalUrl,
+          timestamp: DateTime.now(),
+        );
+
+        await _firestoreService.sendMessage(message);
+
+        await _firestoreService.updateChatLastMessage(
+          _chatId.value,
+          "[Tin nhắn thoại]",
+        );
+
+        print("Upload Voice thành công! URL: $finalUrl");
+
+        if (!kIsWeb) {
+          io.File audioFile = io.File(path);
+          if (await audioFile.exists()) {
+            await audioFile.delete();
+          }
+        }
+      } catch (e) {
+        print("Lỗi trong quá trình upload voice file: $e");
+        Get.snackbar("Lỗi", "Không thể gửi tin nhắn thoại");
+      } finally {
+        _isSending.value = false;
+        recordDuration.value = 0;
+      }
+    } else {
+      recordDuration.value = 0;
+    }
+  }
+
+  Future<void> cancelRecording() async {
+    _recordTimer?.cancel();
+    await _audioRecorder.stop();
+    isRecording.value = false;
+    recordDuration.value = 0;
+
+    if (!kIsWeb && _audioFilePath != null) {
+      try {
+        final file = io.File(_audioFilePath!);
+        if (await file.exists()) {
+          await file.delete();
+        }
+      } catch (e) {
+        print("Lỗi khi xóa file ghi âm tạm thời: $e");
+      }
+    }
+  }
+
+  String get recordDurationText {
+    final minutes = (recordDuration.value / 60).floor().toString().padLeft(
+      2,
+      '0',
+    );
+    final seconds = (recordDuration.value % 60).toString().padLeft(2, '0');
+    return "$minutes:$seconds";
   }
 
   void clearError() {

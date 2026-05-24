@@ -413,120 +413,208 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             ),
           );
         }),
-        Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-              child: Row(
-                children: [
-                  // 1. Nút chọn Ảnh
-                  IconButton(
-                    icon: const Icon(Icons.image, color: AppTheme.primaryColor),
-                    onPressed: () =>
-                        controller.openFilePickerAndUpload(context),
-                  ),
-                  // 2. Nút chọn File
-                  IconButton(
-                    icon: const Icon(
-                      Icons.attach_file,
-                      color: AppTheme.primaryColor,
+
+        Obx(() {
+          // TRƯỜNG HỢP 1: ĐANG GHI ÂM VOICE CHAT (Giao diện ghi âm mới)
+          if (controller.isRecording.value) {
+            return Row(
+              children: [
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 6,
                     ),
-                    onPressed: () =>
-                        controller.openFilePickerAndUpload(context),
-                  ),
-                ],
-              ),
-            ),
-            SizedBox(width: 8),
-            Expanded(
-              child: Container(
-                decoration: BoxDecoration(
-                  color: AppTheme.cardColor,
-                  borderRadius: BorderRadius.circular(24),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: controller.messageController,
-                        decoration: const InputDecoration(
-                          hintText: "Type a message",
-                          border: InputBorder.none,
-                          contentPadding: EdgeInsets.symmetric(
-                            vertical: 12,
-                            horizontal: 20,
+                    decoration: BoxDecoration(
+                      color: AppTheme.cardColor,
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.fiber_manual_record,
+                          color: Colors.red,
+                          size: 18,
+                        ),
+                        const SizedBox(width: 8),
+                        const Text(
+                          "Đang ghi âm...",
+                          style: TextStyle(
+                            color: Colors.red,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
-                        maxLines: null,
-                        textCapitalization: TextCapitalization.sentences,
-                        onSubmitted: (_) => controller.sendMessage(),
-                      ),
+                        const Spacer(),
+                        // Thời gian chạy (Ví dụ: 00:05) lấy từ Controller của ông
+                        Text(
+                          controller.recordDurationText,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15,
+                            color: AppTheme.textPrimaryColor,
+                          ),
+                        ),
+                      ],
                     ),
+                  ),
+                ),
+                const SizedBox(width: 8),
 
+                // Nút Hủy ghi âm (Icon Thùng rác)
+                IconButton(
+                  icon: const Icon(
+                    Icons.delete_outline_rounded,
+                    color: Colors.redAccent,
+                    size: 26,
+                  ),
+                  onPressed: controller.cancelRecording,
+                ),
+
+                // Nút Gửi Voice chat (Dùng chung màu chủ đạo hệ thống)
+                Container(
+                  decoration: BoxDecoration(
+                    color: AppTheme.primaryColor,
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                  child: IconButton(
+                    onPressed: controller.isSending
+                        ? null
+                        : controller.stopAndSendRecording,
+                    icon: const Icon(Icons.send_rounded, color: Colors.white),
+                  ),
+                ),
+              ],
+            );
+          }
+
+          return Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                child: Row(
+                  children: [
+                    // 1. Nút chọn Ảnh
                     IconButton(
                       icon: const Icon(
-                        Icons.emoji_emotions_outlined,
-                        color: Colors.grey,
+                        Icons.image,
+                        color: AppTheme.primaryColor,
                       ),
-                      onPressed: () {
-                        FocusScope.of(context).unfocus();
-                        Get.bottomSheet(
-                          SizedBox(
-                            height: 320,
-                            child: EmojiPicker(
-                              textEditingController:
-                                  controller.messageController,
-
-                              config: Config(
-                                checkPlatformCompatibility: true,
-                                emojiViewConfig: EmojiViewConfig(
-                                  columns: 7,
-                                  emojiSizeMax: 28,
-                                  backgroundColor: Colors.white,
-                                ),
-                                searchViewConfig: const SearchViewConfig(
-                                  backgroundColor: Colors.white,
-                                  buttonIconColor: Colors.transparent,
-                                ),
-                                categoryViewConfig: const CategoryViewConfig(
-                                  backgroundColor: Colors.white,
-                                  indicatorColor: AppTheme.primaryColor,
-                                  iconColorSelected: AppTheme.primaryColor,
-                                  iconColor: Colors.grey,
-                                ),
-                                bottomActionBarConfig:
-                                    const BottomActionBarConfig(
-                                      backgroundColor: Colors.white,
-                                      buttonColor: Colors.white,
-                                      buttonIconColor: Colors.grey,
-                                    ),
-                              ),
-                            ),
-                          ),
-                          backgroundColor: Colors.white,
-                          isScrollControlled: false,
-                        );
-                      },
+                      onPressed: () =>
+                          controller.openFilePickerAndUpload(context),
+                    ),
+                    // 2. Nút chọn File
+                    IconButton(
+                      icon: const Icon(
+                        Icons.attach_file,
+                        color: AppTheme.primaryColor,
+                      ),
+                      onPressed: () =>
+                          controller.openFilePickerAndUpload(context),
                     ),
                   ],
                 ),
               ),
-            ),
-            const SizedBox(width: 8),
-            Container(
-              decoration: BoxDecoration(
-                color: controller.isTyping
-                    ? AppTheme.primaryColor
-                    : AppTheme.textSecondaryColor,
-                borderRadius: BorderRadius.circular(24),
+              SizedBox(width: 8),
+              Expanded(
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: AppTheme.cardColor,
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: controller.messageController,
+                          decoration: const InputDecoration(
+                            hintText: "Type a message",
+                            border: InputBorder.none,
+                            contentPadding: EdgeInsets.symmetric(
+                              vertical: 12,
+                              horizontal: 20,
+                            ),
+                          ),
+                          maxLines: null,
+                          textCapitalization: TextCapitalization.sentences,
+                          onSubmitted: (_) => controller.sendMessage(),
+                        ),
+                      ),
+
+                      IconButton(
+                        icon: const Icon(
+                          Icons.emoji_emotions_outlined,
+                          color: Colors.grey,
+                        ),
+                        onPressed: () {
+                          FocusScope.of(context).unfocus();
+                          Get.bottomSheet(
+                            SizedBox(
+                              height: 320,
+                              child: EmojiPicker(
+                                textEditingController:
+                                    controller.messageController,
+
+                                config: Config(
+                                  checkPlatformCompatibility: true,
+                                  emojiViewConfig: EmojiViewConfig(
+                                    columns: 7,
+                                    emojiSizeMax: 28,
+                                    backgroundColor: Colors.white,
+                                  ),
+                                  searchViewConfig: const SearchViewConfig(
+                                    backgroundColor: Colors.white,
+                                    buttonIconColor: Colors.transparent,
+                                  ),
+                                  categoryViewConfig: const CategoryViewConfig(
+                                    backgroundColor: Colors.white,
+                                    indicatorColor: AppTheme.primaryColor,
+                                    iconColorSelected: AppTheme.primaryColor,
+                                    iconColor: Colors.grey,
+                                  ),
+                                  bottomActionBarConfig:
+                                      const BottomActionBarConfig(
+                                        backgroundColor: Colors.white,
+                                        buttonColor: Colors.white,
+                                        buttonIconColor: Colors.grey,
+                                      ),
+                                ),
+                              ),
+                            ),
+                            backgroundColor: Colors.white,
+                            isScrollControlled: false,
+                          );
+                        },
+                      ),
+                      IconButton(
+                        icon: const Icon(
+                          Icons.mic_none_rounded,
+                          color: Colors.grey,
+                        ),
+                        onPressed: controller.startRecording,
+                      ),
+                    ],
+                  ),
+                ),
               ),
-              child: IconButton(
-                onPressed: controller.isSending ? null : controller.sendMessage,
-                icon: const Icon(Icons.send_rounded, color: Colors.white),
+              const SizedBox(width: 8),
+              Container(
+                decoration: BoxDecoration(
+                  color: controller.isTyping
+                      ? AppTheme.primaryColor
+                      : AppTheme.textSecondaryColor,
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                child: IconButton(
+                  onPressed: controller.isSending
+                      ? null
+                      : controller.sendMessage,
+                  icon: const Icon(Icons.send_rounded, color: Colors.white),
+                ),
               ),
-            ),
-          ],
-        ),
+            ],
+          );
+        }),
       ],
     );
   }
@@ -638,7 +726,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                   },
                 ),
 
-                if (isMyMessage)
+                if (isMyMessage && message.type == MessageType.text)
                   _buildActionItem(
                     icon: Icons.edit_rounded,
                     tooltip: "Chỉnh sửa",

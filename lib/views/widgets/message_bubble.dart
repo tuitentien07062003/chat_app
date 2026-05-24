@@ -1,5 +1,6 @@
 import 'package:chat_app/models/message_model.dart';
 import 'package:chat_app/themes/app_theme.dart';
+import 'package:chat_app/views/widgets/audio_message_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -343,6 +344,11 @@ class MessageBubble extends StatelessWidget {
               color: isMyMessage ? Colors.white : Colors.grey,
             ),
           ),
+        );
+      case MessageType.audio:
+        return AudioMessageWidget(
+          audioUrl: message.content,
+          isMyMessage: isMyMessage,
         );
 
       case MessageType.file:
