@@ -6,7 +6,10 @@ import 'package:chat_app/themes/app_theme.dart';
 import 'package:chat_app/views/call_view.dart';
 import 'package:chat_app/views/widgets/message_bubble.dart';
 import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:get/get.dart';
 
 class ChatScreen extends StatefulWidget {
@@ -78,6 +81,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
           final otherUser = controller.otherUser;
           if (otherUser == null) return Text("Chat");
+
+          final friendship = controller.friendship.value;
+          final bool isBlocked = friendship != null && friendship.isBlocked;
+
           return Row(
             children: [
               CircleAvatar(
@@ -127,15 +134,47 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                       ),
                       overflow: TextOverflow.ellipsis,
                     ),
-                    Text(
-                      otherUser.isOnline ? "Online" : "Offline",
-                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        color: otherUser.isOnline
-                            ? AppTheme.successColor
-                            : AppTheme.textSecondaryColor,
+
+                    if (!isBlocked)
+                      StreamBuilder<DatabaseEvent>(
+                        stream: FirebaseDatabase.instanceFor(
+                          app: Firebase.app(),
+                          databaseURL: dotenv.env['REALTIME_DATABASE_FIREBASE'],
+                        ).ref('status/${otherUser.id}').onValue,
+                        builder: (context, snapshot) {
+                          bool isOnline = otherUser
+                              .isOnline; // Mặc định lấy từ model Firestore
+                          DateTime lastSeen = otherUser
+                              .lastSeen; // Mặc định lấy từ model Firestore
+
+                          if (snapshot.hasData &&
+                              snapshot.data!.snapshot.value != null) {
+                            final Map<dynamic, dynamic> statusMap =
+                                snapshot.data!.snapshot.value
+                                    as Map<dynamic, dynamic>;
+
+                            isOnline = statusMap['isOnline'] ?? false;
+
+                            // Ép kiểu dữ liệu int từ RTDB về DateTime để khớp với model
+                            final rtdbTimestamp = statusMap['lastSeen'];
+                            if (rtdbTimestamp is int) {
+                              lastSeen = DateTime.fromMillisecondsSinceEpoch(
+                                rtdbTimestamp,
+                              );
+                            }
+                          }
+                          return Text(
+                            isOnline ? "Online" : _getLastSeenString(lastSeen),
+                            style: Theme.of(context).textTheme.bodyLarge
+                                ?.copyWith(
+                                  color: otherUser.isOnline
+                                      ? AppTheme.successColor
+                                      : AppTheme.textSecondaryColor,
+                                ),
+                            overflow: TextOverflow.ellipsis,
+                          );
+                        },
                       ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
                   ],
                 ),
               ),
@@ -921,5 +960,21 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       ),
       isScrollControlled: true,
     );
+  }
+
+  String _getLastSeenString(DateTime? lastSeenDateTime) {
+    if (lastSeenDateTime == null) return "Offline";
+
+    final difference = DateTime.now().difference(lastSeenDateTime);
+
+    if (difference.inMinutes < 1) {
+      return "Vừa mới truy cập";
+    } else if (difference.inMinutes < 60) {
+      return "Hoạt động ${difference.inMinutes} phút trước";
+    } else if (difference.inHours < 24) {
+      return "Hoạt động ${difference.inHours} giờ trước";
+    } else {
+      return "Hoạt động ${difference.inDays} ngày trước";
+    }
   }
 }

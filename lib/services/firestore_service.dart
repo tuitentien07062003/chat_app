@@ -10,9 +10,68 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:path/path.dart' as p;
 import 'package:dio/dio.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:firebase_database/firebase_database.dart';
+import 'package:firebase_core/firebase_core.dart';
 
 class FirestoreService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
+  // 1. HÀM MỚI: Thiết lập Presence khi User mở app / login
+  Future<void> setupUserPresence(String userId) async {
+    final FirebaseDatabase rtdb = FirebaseDatabase.instanceFor(
+      app: Firebase.app(),
+      databaseURL: dotenv.env['REALTIME_DATABASE_FIREBASE'],
+    );
+    final DatabaseReference statusRef = rtdb.ref('status/$userId');
+
+    rtdb.ref('.info/connected').onValue.listen((event) {
+      final bool isConnected = event.snapshot.value as bool? ?? false;
+
+      if (isConnected) {
+        // Gài lệnh chờ: Khi rớt mạng, tự động update RTDB
+        statusRef
+            .onDisconnect()
+            .set({'isOnline': false, 'lastSeen': ServerValue.timestamp})
+            .then((_) {
+              // Báo Online lên RTDB
+              statusRef.set({
+                'isOnline': true,
+                'lastSeen': ServerValue.timestamp,
+              });
+
+              // Báo Online lên Firestore (Dùng FieldValue.serverTimestamp() để lưu chuẩn DateTime)
+              _firestore.collection('users').doc(userId).update({
+                'isOnline': true,
+                'lastSeen': FieldValue.serverTimestamp(),
+              });
+            });
+      }
+    });
+  }
+
+  // 2. HÀM MỚI: Dọn dẹp Presence khi User chủ động Logout
+  Future<void> clearUserPresence(String userId) async {
+    try {
+      // 1. Ép Offline trên Firestore
+      await _firestore.collection('users').doc(userId).update({
+        'isOnline': false,
+        'lastSeen': FieldValue.serverTimestamp(),
+      });
+
+      // 2. Ép Offline trên RTDB và hủy lệnh chờ onDisconnect
+      final rtdb = FirebaseDatabase.instanceFor(
+        app: Firebase.app(),
+        databaseURL: dotenv.env['REALTIME_DATABASE_FIREBASE'],
+      );
+      await rtdb.ref('status/$userId').set({
+        'isOnline': false,
+        'lastSeen': ServerValue.timestamp,
+      });
+      await rtdb.ref('status/$userId').onDisconnect().cancel();
+    } catch (e) {
+      print("Lỗi khi clear presence: $e");
+    }
+  }
 
   Future<void> createUser(UserModel user) async {
     try {

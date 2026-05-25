@@ -16,51 +16,13 @@ class MainScreen extends StatefulWidget {
   State<MainScreen> createState() => _MainScreenState();
 }
 
-class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
-  late final FirestoreService _firestoreService;
-  late final AuthController _authController;
+class _MainScreenState extends State<MainScreen> {
   late final MainController controller;
 
   @override
   void initState() {
     super.initState();
-    _firestoreService = FirestoreService();
-    _authController = Get.find<AuthController>();
     controller = Get.find<MainController>();
-    WidgetsBinding.instance.addObserver(this);
-    _setOnlineStatus(true);
-  }
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    _setOnlineStatus(false);
-    super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    super.didChangeAppLifecycleState(state);
-
-    switch (state) {
-      case AppLifecycleState.resumed:
-        _setOnlineStatus(true);
-        break;
-      case AppLifecycleState.detached:
-      case AppLifecycleState.paused:
-      case AppLifecycleState.inactive:
-      case AppLifecycleState.hidden:
-        _setOnlineStatus(false);
-        break;
-    }
-  }
-
-  void _setOnlineStatus(bool isOnline) {
-    final currentUserId = _authController.user?.uid;
-
-    if (currentUserId != null) {
-      _firestoreService.updateUserOnlineStatus(currentUserId, isOnline);
-    }
   }
 
   @override

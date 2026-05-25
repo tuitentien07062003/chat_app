@@ -68,7 +68,7 @@ class ChatController extends GetxController {
   // ========= Voice ==========
   final AudioRecorder _audioRecorder = AudioRecorder();
   final RxBool isRecording = false.obs;
-  final RxInt recordDuration = 0.obs; // Tính bằng giây
+  final RxInt recordDuration = 0.obs;
   Timer? _recordTimer;
   String? _audioFilePath;
 

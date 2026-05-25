@@ -1,11 +1,13 @@
 import 'package:chat_app/models/user_model.dart';
 import 'package:chat_app/routes/app_routes.dart';
 import 'package:chat_app/services/auth_service.dart';
+import 'package:chat_app/services/firestore_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:get/get.dart';
 
 class AuthController extends GetxController {
   final AuthService _authService = AuthService();
+  final FirestoreService _firestoreService = FirestoreService();
   final Rx<User?> _user = Rx<User?>(null);
   final RxBool _isLoading = false.obs;
   final Rx<UserModel?> _currentUser = Rx<UserModel?>(null);
@@ -27,11 +29,26 @@ class AuthController extends GetxController {
   }
 
   void _handleAuthStateChanged(User? user) {
+    // if (user == null) {
+    //   if (Get.currentRoute != AppRoutes.login) {
+    //     Get.offAllNamed(AppRoutes.login);
+    //   }
+    // } else {
+    //   if (Get.currentRoute != AppRoutes.main) {
+    //     Get.offAllNamed(AppRoutes.main);
+    //   }
+    // }
+    // if (!_isInitialized.value) {
+    //   _isInitialized.value = true;
+    // }
+
     if (user == null) {
       if (Get.currentRoute != AppRoutes.login) {
         Get.offAllNamed(AppRoutes.login);
       }
     } else {
+      _firestoreService.setupUserPresence(user.uid);
+
       if (Get.currentRoute != AppRoutes.main) {
         Get.offAllNamed(AppRoutes.main);
       }
@@ -42,9 +59,21 @@ class AuthController extends GetxController {
   }
 
   void checkInitialAuthState() {
+    // final currentUser = FirebaseAuth.instance.currentUser;
+    // if (currentUser != null) {
+    //   _user.value = currentUser;
+    //   Get.offAllNamed(AppRoutes.main);
+    // } else {
+    //   Get.offAllNamed(AppRoutes.login);
+    // }
+    // _isInitialized.value = true;
+
     final currentUser = FirebaseAuth.instance.currentUser;
     if (currentUser != null) {
       _user.value = currentUser;
+
+      _firestoreService.setupUserPresence(currentUser.uid);
+
       Get.offAllNamed(AppRoutes.main);
     } else {
       Get.offAllNamed(AppRoutes.login);
@@ -107,7 +136,17 @@ class AuthController extends GetxController {
 
   Future<void> signOut() async {
     try {
+      // _isLoading.value = true;
+      // await _authService.signOut();
+      // _currentUser.value = null;
+      // Get.offAllNamed(AppRoutes.login);
+
       _isLoading.value = true;
+
+      if (_user.value != null) {
+        await _firestoreService.clearUserPresence(_user.value!.uid);
+      }
+
       await _authService.signOut();
       _currentUser.value = null;
       Get.offAllNamed(AppRoutes.login);
